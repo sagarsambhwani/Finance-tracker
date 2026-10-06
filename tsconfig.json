@@ -7,13 +7,17 @@
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "types": ["vite/client"],
+        "types": ["vite/client", "node"],
         "baseUrl": ".",
         "paths": {
             "@/*": ["resources/ts/*"]
         },
-        "allowImportingTsExtensions": true,
         "noEmit": true
     },
-    "include": ["resources/ts/**/*", "vite.config.ts"]
+    "include": [
+        "resources/ts/**/*",
+        "api/**/*",
+        "vite.config.ts",
+        "drizzle.config.ts"
+    ]
 }

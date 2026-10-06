@@ -24,7 +24,7 @@ export function AuthProvider() {
     const { data: status, isPending: statusPending } = useQuery({
         queryKey: ['auth', 'status'],
         queryFn: authApi.status,
-        staleTime: Infinity,
+        staleTime: 2000,
         retry: false,
     })
 

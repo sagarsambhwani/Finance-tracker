@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY resources ./resources
-COPY vite.config.ts ./
+COPY vite.config.ts index.html tsconfig.json ./
 RUN npm run build
 
 FROM composer:2.8 AS backend
@@ -42,7 +42,7 @@ COPY --from=backend /app/artisan ./artisan
 COPY --from=backend /app/database ./database
 COPY --from=backend /app/composer.json ./composer.json
 
-COPY --from=frontend /app/public/build ./public/build
+COPY --from=frontend /app/dist ./public/build
 
 RUN chown -R www-data:www-data /var/www/html \
     && chown -R www-data:www-data /var/lib/nginx /var/log/nginx \

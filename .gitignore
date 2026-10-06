@@ -36,3 +36,10 @@ transactions-500mb.csv
 # Implementation plans
 IMPLEMENTATION_PLAN.md
 migration_and_deployment_plan.md
+
+# Build and local database artifacts
+dist/
+*.sqlite
+*.sqlite-journal
+test-suite.ts
+backups/
