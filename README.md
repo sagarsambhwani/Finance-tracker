@@ -71,10 +71,6 @@ All data is stored inside the local SQLite database.
 
 ---
 
-## 👤 Author
-
-Developed by **[Sagar Sambhwani](https://github.com/sagarsambhwani)**
-
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
