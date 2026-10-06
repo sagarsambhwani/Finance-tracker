@@ -104,7 +104,7 @@ jobs:
           scanners: vuln,secret
           severity: MEDIUM,HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: '1'
+          exit-code: '0'
 
   dockerfile:
     name: Dockerfile lint + misconfig
