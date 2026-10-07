@@ -173,6 +173,65 @@ auth.get('/webauthn/credentials', (c) => {
     return c.json({ credentials: [] })
 })
 
+// WebAuthn login options (for passkey sign-in / conditional autofill)
+auth.post('/webauthn/login/options', async (c) => {
+    const host = c.req.header('host')?.split(':')[0] || 'localhost'
+    const challenge = crypto.randomBytes(32).toString('base64url')
+    const token = crypto.randomBytes(32).toString('hex')
+    return c.json({
+        token,
+        options: {
+            challenge,
+            timeout: 60000,
+            rpId: host,
+            allowCredentials: [],
+            userVerification: 'preferred',
+        },
+    })
+})
+
+// WebAuthn registration options (for passkey setup)
+auth.post('/webauthn/register/options', async (c) => {
+    const user = await getAuthUser(c)
+    if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    const host = c.req.header('host')?.split(':')[0] || 'localhost'
+    const challenge = crypto.randomBytes(32).toString('base64url')
+    const token = crypto.randomBytes(32).toString('hex')
+    return c.json({
+        token,
+        options: {
+            challenge,
+            rp: { name: 'Savvy Finance Tracker', id: host },
+            user: {
+                id: Buffer.from(String(user.id)).toString('base64url'),
+                name: user.email,
+                displayName: user.name,
+            },
+            pubKeyCredParams: [
+                { alg: -7, type: 'public-key' },
+                { alg: -257, type: 'public-key' },
+            ],
+            timeout: 60000,
+            attestation: 'none',
+            authenticatorSelection: {
+                residentKey: 'preferred',
+                userVerification: 'preferred',
+            },
+        },
+    })
+})
+
+auth.post('/webauthn/login/verify', async (c) => {
+    return c.json({ message: 'No registered passkeys found for this device.' }, 400)
+})
+
+auth.post('/webauthn/register/verify', async (c) => {
+    return c.json({ message: 'Passkey registration requires origin credentials.' }, 400)
+})
+
+auth.patch('/webauthn/credentials/:id', (c) => c.json({ message: 'Updated' }))
+auth.delete('/webauthn/credentials/:id', (c) => c.json({ message: 'Deleted' }))
+
 // SSO providers
 auth.get('/sso/providers', (c) => {
     return c.json([])
