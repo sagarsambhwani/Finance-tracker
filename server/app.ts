@@ -20,6 +20,14 @@ import { initDatabase } from './db/client'
 
 const app = new Hono().basePath('/api')
 
+app.onError((err, c) => {
+    console.error('API Error:', err)
+    return c.json({
+        message: err.message || 'Internal server error',
+        name: err.name,
+    }, 500)
+})
+
 // Ensure tables exist and initial currencies/categories are seeded on cold start
 initDatabase()
 

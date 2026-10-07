@@ -262,8 +262,8 @@ var settings = sqliteTable("settings", {
 });
 
 // server/db/client.ts
-var url = process.env.TURSO_DATABASE_URL || "libsql://finance-tracker-sagarsambhwani.aws-eu-west-1.turso.io";
-var authToken = process.env.TURSO_AUTH_TOKEN;
+var url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || "libsql://finance-tracker-sagarsambhwani.aws-eu-west-1.turso.io";
+var authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTEzNjg5NjcsImlkIjoiMDFhMTE1ZTUtZTAwMS03Yjc0LThiZTUtOGVhYjA4MWJlOTI3Iiwia2lkIjoickhnU0Q0RnUwRzhFbG5udlFSbTQyeFJZck4wS1A1VURkTXhQcnN0bXNnOCIsInJpZCI6IjBmOTg4ZjhiLTc1YzQtNGYxZS1hMDRmLTAxM2YzZWRkZDRhNCJ9.yUy6GDwaV0Xz2Idsw8HwXM61X9raMDkP6xqNdxehKYrgWEtrVVM_uvjd2cSNT76WYIRo151P8OXz4DEcTIPgDg";
 var rawClient = createClient({
   url,
   authToken
@@ -2656,6 +2656,13 @@ var monitoring_default = router16;
 
 // server/app.ts
 var app = new Hono18().basePath("/api");
+app.onError((err, c) => {
+  console.error("API Error:", err);
+  return c.json({
+    message: err.message || "Internal server error",
+    name: err.name
+  }, 500);
+});
 initDatabase();
 app.route("/auth", auth_default);
 app.route("/accounts", accounts_default);
