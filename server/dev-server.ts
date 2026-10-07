@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server'
-import { app } from './index'
+import { app } from './app'
 
 const port = 3001
 console.log(`🚀 Finance Tracker API running at http://localhost:${port}/api`)

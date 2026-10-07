@@ -16,6 +16,7 @@
     },
     "include": [
         "resources/ts/**/*",
+        "server/**/*",
         "api/**/*",
         "vite.config.ts",
         "drizzle.config.ts"

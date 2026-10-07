@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
         "dev:web": "vite",
-        "dev:api": "tsx watch api/server.ts",
+        "dev:api": "tsx watch server/dev-server.ts",
         "build": "vite build",
         "db:push": "drizzle-kit push"
     },
