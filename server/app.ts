@@ -16,7 +16,7 @@ import automation from './routes/automation'
 import settings from './routes/settings'
 import timezones from './routes/timezones'
 import monitoring from './routes/monitoring'
-import { initDatabase } from './db/client'
+import { initDatabase, rawClient } from './db/client'
 
 const app = new Hono().basePath('/api')
 
@@ -80,7 +80,14 @@ app.post('/s3/multipart/complete', (c) => c.json({ location: '', key: 'file', up
 app.delete('/s3/multipart/:id', (c) => c.json({}))
 
 // Health check
-app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
+app.get('/health', async (c) => {
+    try {
+        await rawClient.execute('SELECT 1')
+        return c.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() })
+    } catch (e: any) {
+        return c.json({ status: 'degraded', database_error: e.message, timestamp: new Date().toISOString() })
+    }
+})
 
 export { app }
 export default app
