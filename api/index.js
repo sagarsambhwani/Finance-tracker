@@ -262,11 +262,25 @@ var settings = sqliteTable("settings", {
 });
 
 // server/db/client.ts
-var url = "libsql://finance-tracker-sagarsambhwani.aws-eu-west-1.turso.io";
-var authToken = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTEzNjg5NjcsImlkIjoiMDFhMTE1ZTUtZTAwMS03Yjc0LThiZTUtOGVhYjA4MWJlOTI3Iiwia2lkIjoickhnU0Q0RnUwRzhFbG5udlFSbTQyeFJZck4wS1A1VURkTXhQcnN0bXNnOCIsInJpZCI6IjBmOTg4ZjhiLTc1YzQtNGYxZS1hMDRmLTAxM2YzZWRkZDRhNCJ9.yUy6GDwaV0Xz2Idsw8HwXM61X9raMDkP6xqNdxehKYrgWEtrVVM_uvjd2cSNT76WYIRo151P8OXz4DEcTIPgDg";
+var hardcodedUrl = "libsql://finance-tracker-sagarsambhwani.aws-eu-west-1.turso.io";
+var hardcodedToken = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTEzNjg5NjcsImlkIjoiMDFhMTE1ZTUtZTAwMS03Yjc0LThiZTUtOGVhYjA4MWJlOTI3Iiwia2lkIjoickhnU0Q0RnUwRzhFbG5udlFSbTQyeFJZck4wS1A1VURkTXhQcnN0bXNnOCIsInJpZCI6IjBmOTg4ZjhiLTc1YzQtNGYxZS1hMDRmLTAxM2YzZWRkZDRhNCJ9.yUy6GDwaV0Xz2Idsw8HwXM61X9raMDkP6xqNdxehKYrgWEtrVVM_uvjd2cSNT76WYIRo151P8OXz4DEcTIPgDg";
+var url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || hardcodedUrl;
+var authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || hardcodedToken;
 var rawClient = createClient({
   url,
-  authToken
+  authToken,
+  fetch: async (req) => {
+    const hasBody = req.method !== "GET" && req.method !== "HEAD" && req.body != null;
+    return fetch(req.url, {
+      method: req.method,
+      headers: {
+        "authorization": `Bearer ${authToken}`,
+        "content-type": "application/json"
+      },
+      body: hasBody ? req.body : void 0,
+      duplex: hasBody ? "half" : void 0
+    });
+  }
 });
 var db = drizzle(rawClient, { schema: schema_exports });
 var CREATE_TABLES_SQL = `
