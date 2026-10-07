@@ -87,3 +87,26 @@ export function today(): string {
 export function isSameDay(a: Date, b: Date): boolean {
     return toDateString(a) === toDateString(b)
 }
+
+const CATEGORY_ICON_MAP: Record<string, string> = {
+    wallet: '💼',
+    briefcase: '💼',
+    utensils: '🍽️',
+    'shopping-cart': '🛒',
+    home: '🏠',
+    zap: '⚡',
+    car: '🚗',
+    film: '🎬',
+    heart: '❤️',
+    gift: '🎁',
+    book: '📚',
+    phone: '📱',
+    plane: '✈️',
+}
+
+export function formatCategoryIcon(icon?: string | null): string {
+    if (!icon) return '🏷️'
+    const lower = icon.toLowerCase().trim()
+    return CATEGORY_ICON_MAP[lower] ?? icon
+}
+

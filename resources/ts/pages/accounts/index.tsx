@@ -1,5 +1,5 @@
 import { ListPage } from '@/components/shared'
-import { createAccountColumns } from '@/components/features/accounts'
+import { createAccountColumns, MobileAccountCard } from '@/components/features/accounts'
 import { useAccounts, useDeleteAccount } from '@/hooks'
 import { useReadOnly } from '@/components/providers/ReadOnlyProvider'
 
@@ -19,6 +19,13 @@ export default function AccountsPage() {
             data={accounts ?? []}
             columns={columns}
             isLoading={isLoading}
+            mobileRender={({ row }) => (
+                <MobileAccountCard
+                    account={row.original}
+                    onDelete={(id) => deleteAccount.mutate(id)}
+                    isReadOnly={isReadOnly}
+                />
+            )}
         />
     )
 }

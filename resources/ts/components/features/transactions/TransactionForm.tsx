@@ -282,7 +282,7 @@ export function TransactionForm({
                     ))}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Account */}
                     <FormField
                         control={form.control}
@@ -341,20 +341,20 @@ export function TransactionForm({
                 {/* Balance Preview */}
                 {balancePreview && (
                     <div className={cn(
-                        'flex items-center gap-4 p-3 rounded-lg border text-sm',
+                        'flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border text-sm',
                         balancePreview.insufficientFunds ? 'bg-destructive/10 border-destructive/50' : 'bg-muted/50'
                     )}>
-                        <div className="flex-1">
-                            <span className="text-muted-foreground">Balance: </span>
-                            <span className="font-mono font-medium">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground text-xs sm:text-sm">Balance:</span>
+                            <span className="font-mono font-medium text-xs sm:text-sm">
                                 {formatAmount(balancePreview.currentBalance, balancePreview.decimals, balancePreview.currency)}
                             </span>
                         </div>
-                        <span className="text-muted-foreground">→</span>
-                        <div className="flex-1 text-right">
-                            <span className="text-muted-foreground">After: </span>
+                        <span className="text-muted-foreground text-xs">→</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground text-xs sm:text-sm">After:</span>
                             <span className={cn(
-                                'font-mono font-medium',
+                                'font-mono font-medium text-xs sm:text-sm',
                                 balancePreview.insufficientFunds ? 'text-destructive' :
                                     balancePreview.newBalance > balancePreview.currentBalance ? 'text-green-600' : 'text-foreground'
                             )}>
@@ -362,31 +362,31 @@ export function TransactionForm({
                             </span>
                         </div>
                         {balancePreview.insufficientFunds && (
-                            <span className="text-destructive text-xs font-medium">Insufficient funds</span>
+                            <span className="text-destructive text-xs font-medium w-full text-right">Insufficient funds</span>
                         )}
                     </div>
                 )}
 
                 {/* To Account Balance Preview (Transfer) */}
                 {toBalancePreview && (
-                    <div className="flex items-center gap-4 p-3 rounded-lg border bg-muted/50 text-sm">
-                        <div className="flex-1">
-                            <span className="text-muted-foreground">To Balance: </span>
-                            <span className="font-mono font-medium">
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border bg-muted/50 text-sm">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground text-xs sm:text-sm">To Balance:</span>
+                            <span className="font-mono font-medium text-xs sm:text-sm">
                                 {formatAmount(toBalancePreview.currentBalance, toBalancePreview.decimals, toBalancePreview.currency)}
                             </span>
                         </div>
-                        <span className="text-muted-foreground">→</span>
-                        <div className="flex-1 text-right">
-                            <span className="text-muted-foreground">After: </span>
-                            <span className="font-mono font-medium text-green-600">
+                        <span className="text-muted-foreground text-xs">→</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground text-xs sm:text-sm">After:</span>
+                            <span className="font-mono font-medium text-xs sm:text-sm text-green-600">
                                 {formatAmount(toBalancePreview.newBalance, toBalancePreview.decimals, toBalancePreview.currency)}
                             </span>
                         </div>
                     </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Amount */}
                     <FormField
                         control={form.control}
@@ -556,7 +556,7 @@ export function TransactionForm({
                         </div>
 
                         {fields.length > 0 && (
-                            <div className="border rounded-lg overflow-hidden">
+                            <div className="border rounded-lg overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead className="bg-muted/50">
                                         <tr>

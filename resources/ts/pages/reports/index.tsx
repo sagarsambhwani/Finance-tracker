@@ -46,13 +46,15 @@ export default function ReportsPage() {
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as ReportTab)} className="mb-6">
-                <TabsList className="h-auto flex-wrap md:flex-nowrap md:h-9 md:w-fit">
-                    {TABS.map(tab => (
-                        <TabsTrigger key={tab.value} value={tab.value}>
-                            {tab.label}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
+                <div className="overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <TabsList className="w-max inline-flex h-9">
+                        {TABS.map(tab => (
+                            <TabsTrigger key={tab.value} value={tab.value}>
+                                {tab.label}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </div>
             </Tabs>
 
             {/* Tab Content */}

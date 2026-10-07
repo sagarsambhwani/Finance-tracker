@@ -158,7 +158,7 @@ export function RecurringForm({
                 />
 
                 {/* Account Selection */}
-                <div className={cn('grid gap-4', isTransfer ? 'grid-cols-2' : 'grid-cols-1')}>
+                <div className={cn('grid gap-4', isTransfer ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1')}>
                     <FormField
                         control={form.control}
                         name="account_id"
@@ -213,7 +213,7 @@ export function RecurringForm({
                 )}
 
                 {/* Amount */}
-                <div className={cn('grid gap-4', isTransfer ? 'grid-cols-2' : 'grid-cols-1')}>
+                <div className={cn('grid gap-4', isTransfer ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1')}>
                     <FormField
                         control={form.control}
                         name="amount"
@@ -285,7 +285,7 @@ export function RecurringForm({
                 <div className="space-y-4 pt-4 border-t">
                     <h3 className="font-medium">Schedule</h3>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
                             control={form.control}
                             name="frequency"
@@ -386,7 +386,7 @@ export function RecurringForm({
                         />
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
                             control={form.control}
                             name="start_date"

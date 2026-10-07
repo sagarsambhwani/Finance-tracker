@@ -65,12 +65,12 @@ export function Header() {
                     </DropdownMenu>
 
                     {balanceLoading ? (
-                        <div className="flex items-center gap-2 text-sm">
+                        <div className="hidden md:flex items-center gap-2 text-sm">
                             <Wallet className="size-4 text-muted-foreground" />
                             <Skeleton className="h-4 w-20" />
                         </div>
                     ) : balance ? (
-                        <div className="flex items-center gap-2 text-sm">
+                        <div className="hidden md:flex items-center gap-2 text-sm">
                             <Wallet className="size-4 text-muted-foreground" />
                             <span className="font-mono font-medium">
                                 {(balance.total_balance ?? 0).toFixed(balance.decimals ?? 2)} {balance.currency}

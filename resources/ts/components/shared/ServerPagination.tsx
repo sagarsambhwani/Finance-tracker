@@ -78,16 +78,16 @@ export function ServerPagination({
     const canGoNext = current_page < last_page
 
     return (
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
             {showInfo && from !== undefined && to !== undefined && total !== undefined ? (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left order-2 sm:order-1">
                     Showing {from} to {to} of {total} {infoLabel}
                 </div>
             ) : (
-                <div />
+                <div className="hidden sm:block" />
             )}
 
-            <Pagination className="mx-0 w-auto justify-end">
+            <Pagination className="mx-0 w-full sm:w-auto justify-center sm:justify-end order-1 sm:order-2 overflow-x-auto">
                 <PaginationContent>
                     <PaginationItem>
                         <PaginationPrevious

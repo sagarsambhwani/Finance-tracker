@@ -1,5 +1,5 @@
 import { ListPage } from '@/components/shared'
-import { createRecurringColumns } from '@/components/features/recurring'
+import { createRecurringColumns, MobileRecurringCard } from '@/components/features/recurring'
 import { useRecurring, useDeleteRecurring, useSkipRecurring } from '@/hooks'
 import { useReadOnly } from '@/components/providers/ReadOnlyProvider'
 
@@ -24,6 +24,14 @@ export default function RecurringPage() {
             data={recurring ?? []}
             columns={columns}
             isLoading={isLoading}
+            mobileRender={({ row }) => (
+                <MobileRecurringCard
+                    recurring={row.original}
+                    onDelete={(id) => deleteRecurring.mutate(id)}
+                    onSkip={(id) => skipRecurring.mutate(id)}
+                    isReadOnly={isReadOnly}
+                />
+            )}
         />
     )
 }

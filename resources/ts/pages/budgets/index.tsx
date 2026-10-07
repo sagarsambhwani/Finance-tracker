@@ -1,5 +1,5 @@
 import { ListPage } from '@/components/shared'
-import { createBudgetColumns } from '@/components/features/budgets'
+import { createBudgetColumns, MobileBudgetCard } from '@/components/features/budgets'
 import { useBudgets, useDeleteBudget } from '@/hooks'
 import { useReadOnly } from '@/components/providers/ReadOnlyProvider'
 
@@ -19,6 +19,13 @@ export default function BudgetsPage() {
             data={budgets ?? []}
             columns={columns}
             isLoading={isLoading}
+            mobileRender={({ row }) => (
+                <MobileBudgetCard
+                    budget={row.original}
+                    onDelete={(id) => deleteBudget.mutate(id)}
+                    isReadOnly={isReadOnly}
+                />
+            )}
         />
     )
 }

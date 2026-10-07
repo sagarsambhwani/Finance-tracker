@@ -23,6 +23,7 @@ import { budgetSchema, BudgetFormData, BudgetFormInput } from '@/schemas'
 import { useCategories, useCurrencies, useTags } from '@/hooks'
 import { Category } from '@/types'
 import { Badge } from '@/components/ui/badge'
+import { formatCategoryIcon } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { FormWrapper } from '@/components/shared/FormWrapper'
 
@@ -91,7 +92,7 @@ export function BudgetForm({
                     )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField
                         control={form.control}
                         name="amount"
@@ -123,7 +124,7 @@ export function BudgetForm({
                                     value={field.value?.toString() ?? ''}
                                 >
                                     <FormControl>
-                                        <SelectTrigger>
+                                        <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Base currency" />
                                         </SelectTrigger>
                                     </FormControl>
@@ -150,7 +151,7 @@ export function BudgetForm({
                             <FormLabel>Period</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Select period" />
                                     </SelectTrigger>
                                 </FormControl>
@@ -168,7 +169,7 @@ export function BudgetForm({
                 />
 
                 {period === 'one_time' && (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
                             control={form.control}
                             name="start_date"
@@ -235,7 +236,7 @@ export function BudgetForm({
                         render={() => (
                             <FormItem>
                                 <FormLabel>Categories</FormLabel>
-                                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-md border p-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-md border p-3">
                                     {categories.map((category: Category) => (
                                         <FormField
                                             key={category.id}
@@ -266,7 +267,7 @@ export function BudgetForm({
                                                             className="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
                                                             style={{ backgroundColor: category.color }}
                                                         >
-                                                            {category.icon}
+                                                            {formatCategoryIcon(category.icon)}
                                                         </span>
                                                         {category.name}
                                                     </FormLabel>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { DataTable } from '@/components/shared'
-import { createDebtColumns, DebtPaymentDialog } from '@/components/features/debts'
+import { createDebtColumns, DebtPaymentDialog, MobileDebtCard } from '@/components/features/debts'
 import { useDebtsWithSummary, useDeleteDebt, useDebtPayment, useDebtCollection, useReopenDebt } from '@/hooks'
 import { useReadOnly } from '@/components/providers/ReadOnlyProvider'
 import { Debt, DebtPaymentFormData } from '@/types'
@@ -67,14 +67,14 @@ export default function DebtsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-3xl font-bold">Debts</h1>
-                    <p className="text-muted-foreground">Track money you owe and money owed to you</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Debts</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">Track money you owe and money owed to you</p>
                 </div>
-                <Button asChild>
+                <Button asChild size="sm" className="sm:h-10 sm:px-4 self-start sm:self-auto">
                     <Link to="/debts/create">
-                        <Plus className="mr-2 size-4" />
+                        <Plus className="mr-1.5 size-4" />
                         New Debt
                     </Link>
                 </Button>
@@ -144,6 +144,16 @@ export default function DebtsPage() {
                 isLoading={isLoading}
                 searchColumn="name"
                 searchPlaceholder="Search debts..."
+                mobileRender={({ row }) => (
+                    <MobileDebtCard
+                        debt={row.original}
+                        onDelete={(id) => deleteDebt.mutate(id)}
+                        onPayment={handlePayment}
+                        onCollect={handleCollect}
+                        onReopen={(id) => reopenDebt.mutate(id)}
+                        isReadOnly={isReadOnly}
+                    />
+                )}
             />
 
             <DebtPaymentDialog

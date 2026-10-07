@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChevronRight } from 'lucide-react'
 import { useTransactionReportTop } from '@/hooks'
-import { formatShortDate as formatDate } from '@/lib/utils'
+import { formatShortDate as formatDate, formatCategoryIcon } from '@/lib/utils'
 import type { ReportFilters } from '../types'
 
 interface TopIncomeProps {
@@ -78,7 +78,7 @@ export function TopIncome({ filters, limit = 10 }: TopIncomeProps) {
                                     className="flex items-center justify-center size-9 rounded-lg flex-shrink-0"
                                     style={{ backgroundColor: transaction.category.color }}
                                 >
-                                    <span className="text-lg">{transaction.category.icon}</span>
+                                    <span className="text-lg">{formatCategoryIcon(transaction.category.icon)}</span>
                                 </div>
 
                                 {/* Description and details */}

@@ -20,7 +20,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { createTransactionColumns } from '@/components/features/transactions'
+import { createTransactionColumns, MobileTransactionCard } from '@/components/features/transactions'
 import { useTransactions, useDeleteTransaction, useDuplicateTransaction, useCategories, useTags } from '@/hooks'
 import { useReadOnly } from '@/components/providers/ReadOnlyProvider'
 import { TransactionFormType, Transaction } from '@/types'
@@ -162,21 +162,22 @@ export default function TransactionsPage() {
             />
 
             {/* Type Filter & Sort */}
-            <div className="flex items-center justify-between gap-4 mb-4">
-                <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
                     {TYPE_FILTERS.map(({ value, label, icon: Icon }) => (
                         <Button
                             key={label}
                             variant={params.type === value ? 'default' : 'outline'}
                             size="sm"
+                            className="whitespace-nowrap h-8 text-xs sm:text-sm px-2.5 sm:px-3"
                             onClick={() => setParams({ type: value, page: 1 })}
                         >
-                            {Icon && <Icon className="size-4 mr-1" />}
+                            {Icon && <Icon className="size-3.5 mr-1" />}
                             {label}
                         </Button>
                     ))}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto w-full sm:w-auto">
                     <Select
                         value={`${params.sortBy}:${params.sortDir}`}
                         onValueChange={(val) => {
@@ -184,8 +185,8 @@ export default function TransactionsPage() {
                             setParams({ sortBy, sortDir, page: 1 })
                         }}
                     >
-                        <SelectTrigger className="w-[180px] h-9">
-                            <ArrowUpDown className="size-4 mr-2" />
+                        <SelectTrigger className="w-full sm:w-[180px] h-8 text-xs sm:text-sm">
+                            <ArrowUpDown className="size-3.5 mr-1.5" />
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -319,6 +320,14 @@ export default function TransactionsPage() {
                 }
                 renderSubComponent={TransactionItems}
                 getRowCanExpand={(row) => (row.original.itemsCount ?? row.original.items?.length ?? 0) > 1}
+                mobileRender={({ row }) => (
+                    <MobileTransactionCard
+                        transaction={row.original}
+                        onDelete={(id) => deleteTransaction.mutate(id)}
+                        onDuplicate={(id) => duplicateTransaction.mutate(id)}
+                        isReadOnly={isReadOnly}
+                    />
+                )}
                 manualPagination
             />
 

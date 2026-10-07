@@ -79,7 +79,7 @@ export function AccountForm({
                             <FormLabel>Type</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Select account type" />
                                     </SelectTrigger>
                                 </FormControl>
@@ -115,7 +115,7 @@ export function AccountForm({
                                 disabled={currenciesLoading}
                             >
                                 <FormControl>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Select currency" />
                                     </SelectTrigger>
                                 </FormControl>

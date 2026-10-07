@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Category } from '@/types'
 
+import { formatCategoryIcon } from '@/lib/utils'
+
 export const createCategoryColumns = (
     onDelete: (id: number) => void,
     typeCounts: { income: number; expense: number },
@@ -34,10 +36,10 @@ export const createCategoryColumns = (
         cell: ({ row }) => (
             <div className="flex items-center gap-3">
                 <div
-                    className="flex items-center justify-center size-10 rounded-lg text-lg"
+                    className="flex items-center justify-center size-10 rounded-lg text-lg shrink-0"
                     style={{ backgroundColor: row.original.color }}
                 >
-                    {row.original.icon}
+                    {formatCategoryIcon(row.original.icon)}
                 </div>
                 <div>
                     <p className="font-medium">{row.original.name}</p>

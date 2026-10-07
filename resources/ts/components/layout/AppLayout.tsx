@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { AppSidebar } from './Sidebar'
 import { Header } from './Header'
+import { MobileNav } from './MobileNav'
 import { ReadOnlyBanner } from './ReadOnlyBanner'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { useUiStore } from '@/stores/ui'
@@ -12,13 +13,15 @@ export function AppLayout() {
     return (
         <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <AppSidebar />
-            <SidebarInset>
+            <SidebarInset className="min-h-screen flex flex-col">
                 <ReadOnlyBanner />
                 <Header />
-                <main className="flex-1 overflow-y-auto p-6">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 md:pb-6">
                     <Outlet />
                 </main>
+                <MobileNav />
             </SidebarInset>
         </SidebarProvider>
     )
 }
+

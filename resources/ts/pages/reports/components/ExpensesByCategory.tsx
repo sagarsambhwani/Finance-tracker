@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
+import { cn, formatCategoryIcon } from '@/lib/utils'
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronRight } from 'lucide-react'
 import { useExpensesByCategory } from '@/hooks'
 import type { ReportFilters } from '../types'
@@ -81,7 +81,7 @@ export function ExpensesByCategory({ filters }: ExpensesByCategoryProps) {
                                         className="flex items-center justify-center size-8 rounded-lg flex-shrink-0"
                                         style={{ backgroundColor: category.color }}
                                     >
-                                        <span className="text-base">{category.icon}</span>
+                                        <span className="text-base">{formatCategoryIcon(category.icon)}</span>
                                     </div>
 
                                     {/* Content */}

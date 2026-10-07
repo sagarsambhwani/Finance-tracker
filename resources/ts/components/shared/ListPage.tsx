@@ -17,6 +17,7 @@ interface ListPageProps<T> {
     emptyTitle?: string
     emptyDescription?: string
     getRowClassName?: (row: Row<T>) => string | undefined
+    mobileRender?: (props: { row: Row<T> }) => React.ReactNode
 }
 
 export function ListPage<T>({
@@ -30,6 +31,7 @@ export function ListPage<T>({
     emptyTitle,
     emptyDescription,
     getRowClassName,
+    mobileRender,
 }: ListPageProps<T>) {
     return (
         <Page title={title}>
@@ -46,6 +48,7 @@ export function ListPage<T>({
                 emptyTitle={emptyTitle ?? `No ${title.toLowerCase()} found`}
                 emptyDescription={emptyDescription ?? `Create your first ${title.toLowerCase().slice(0, -1)} to get started`}
                 getRowClassName={getRowClassName}
+                mobileRender={mobileRender}
                 emptyAction={
                     createLink ? (
                         <Button asChild>

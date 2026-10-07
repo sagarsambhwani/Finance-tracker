@@ -1,5 +1,5 @@
 import { ListPage } from '@/components/shared'
-import { createCurrencyColumns } from '@/components/features/currencies'
+import { createCurrencyColumns, MobileCurrencyCard } from '@/components/features/currencies'
 import { useCurrencies, useDeleteCurrency, useSetBaseCurrency } from '@/hooks'
 import { useReadOnly } from '@/components/providers/ReadOnlyProvider'
 
@@ -26,6 +26,16 @@ export default function CurrenciesPage() {
             data={currencies ?? []}
             columns={columns}
             isLoading={isLoading}
+            mobileRender={({ row }) => (
+                <MobileCurrencyCard
+                    currency={row.original}
+                    onDelete={(id) => deleteCurrency.mutate(id)}
+                    onSetBase={(id) => setBaseCurrency.mutate(id)}
+                    isSettingBase={setBaseCurrency.isPending}
+                    currencyCount={currencies?.length ?? 0}
+                    isReadOnly={isReadOnly}
+                />
+            )}
         />
     )
 }
