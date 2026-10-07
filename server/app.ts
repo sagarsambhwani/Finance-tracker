@@ -16,7 +16,7 @@ import automation from './routes/automation'
 import settings from './routes/settings'
 import timezones from './routes/timezones'
 import monitoring from './routes/monitoring'
-import { initDatabase, rawClient } from './db/client'
+import { initDatabase, rawClient, url, authToken } from './db/client'
 
 const app = new Hono().basePath('/api')
 
@@ -85,7 +85,34 @@ app.get('/health', async (c) => {
         await rawClient.execute('SELECT 1')
         return c.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() })
     } catch (e: any) {
-        return c.json({ status: 'degraded', database_error: e.message, timestamp: new Date().toISOString() })
+        let rawInfo: any = null
+        try {
+            const tursoUrl = url.replace('libsql://', 'https://') + '/v2/pipeline'
+            const tursoRes = await fetch(tursoUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    requests: [{ type: 'execute', stmt: { sql: 'SELECT 1' } }, { type: 'close' }]
+                })
+            })
+            rawInfo = {
+                status: tursoRes.status,
+                body: await tursoRes.text(),
+                token_len: authToken.length,
+                turso_host: tursoUrl
+            }
+        } catch (fetchErr: any) {
+            rawInfo = { fetch_error: fetchErr.message }
+        }
+        return c.json({
+            status: 'degraded',
+            database_error: e.message,
+            raw_turso: rawInfo,
+            timestamp: new Date().toISOString()
+        })
     }
 })
 

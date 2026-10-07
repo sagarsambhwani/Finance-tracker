@@ -2708,7 +2708,34 @@ app.get("/health", async (c) => {
     await rawClient.execute("SELECT 1");
     return c.json({ status: "ok", database: "connected", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   } catch (e) {
-    return c.json({ status: "degraded", database_error: e.message, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+    let rawInfo = null;
+    try {
+      const tursoUrl = url.replace("libsql://", "https://") + "/v2/pipeline";
+      const tursoRes = await fetch(tursoUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${authToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          requests: [{ type: "execute", stmt: { sql: "SELECT 1" } }, { type: "close" }]
+        })
+      });
+      rawInfo = {
+        status: tursoRes.status,
+        body: await tursoRes.text(),
+        token_len: authToken.length,
+        turso_host: tursoUrl
+      };
+    } catch (fetchErr) {
+      rawInfo = { fetch_error: fetchErr.message };
+    }
+    return c.json({
+      status: "degraded",
+      database_error: e.message,
+      raw_turso: rawInfo,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
   }
 });
 
