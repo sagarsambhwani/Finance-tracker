@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db } from '../db/client'
-import { budgets, categories } from '../db/schema'
+import { budgets, categories, currencies, transactions } from '../db/schema'
 import { getAuthUser } from './auth'
 
 const router = new Hono()
@@ -14,15 +14,67 @@ router.use('*', async (c, next) => {
 
 // List budgets
 router.get('/', async (c) => {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+
     const list = await db.select({
         id: budgets.id,
         category_id: budgets.categoryId,
+        currency_id: budgets.currencyId,
         amount: budgets.amount,
         period: budgets.period,
         category: categories,
-    }).from(budgets).leftJoin(categories, eq(budgets.categoryId, categories.id))
+        currency: currencies,
+    })
+    .from(budgets)
+    .leftJoin(categories, eq(budgets.categoryId, categories.id))
+    .leftJoin(currencies, eq(budgets.currencyId, currencies.id))
 
-    return c.json({ data: list })
+    const allExpenses = await db.select().from(transactions).where(eq(transactions.type, 'expense'))
+
+    const mapped = list.map(b => {
+        const amt = Number(b.amount)
+        const spent = allExpenses
+            .filter(t => t.categoryId === b.category_id && t.date >= startOfMonth && t.date <= endOfMonth)
+            .reduce((sum, t) => sum + Number(t.amount), 0)
+
+        const currency = b.currency || { id: 1, code: 'EUR', symbol: '€', decimals: 2 }
+        const progress = {
+            spent,
+            remaining: Math.max(0, amt - spent),
+            percent: amt > 0 ? (spent / amt) * 100 : 0,
+            period_start: startOfMonth,
+            period_end: endOfMonth,
+            is_exceeded: spent > amt,
+        }
+
+        return {
+            id: b.id,
+            name: b.category?.name || 'Budget',
+            amount: amt,
+            currencyId: b.currency_id,
+            currency,
+            period: b.period || 'monthly',
+            periodLabel: b.period === 'yearly' ? 'Yearly' : 'Monthly',
+            startDate: startOfMonth,
+            endDate: endOfMonth,
+            isGlobal: false,
+            notifyAtPercent: 80,
+            isActive: true,
+            categories: b.category ? [b.category] : [],
+            tags: [],
+            progress,
+            // snake_case aliases
+            category_id: b.category_id,
+            currency_id: b.currency_id,
+            is_global: false,
+            is_active: true,
+            category: b.category,
+        }
+    })
+
+    return c.json({ data: mapped })
 })
 
 // Get budget by ID
@@ -31,13 +83,35 @@ router.get('/:id', async (c) => {
     const list = await db.select({
         id: budgets.id,
         category_id: budgets.categoryId,
+        currency_id: budgets.currencyId,
         amount: budgets.amount,
         period: budgets.period,
         category: categories,
-    }).from(budgets).leftJoin(categories, eq(budgets.categoryId, categories.id)).where(eq(budgets.id, id))
+        currency: currencies,
+    })
+    .from(budgets)
+    .leftJoin(categories, eq(budgets.categoryId, categories.id))
+    .leftJoin(currencies, eq(budgets.currencyId, currencies.id))
+    .where(eq(budgets.id, id))
 
     if (list.length === 0) return c.json({ message: 'Budget not found' }, 404)
-    return c.json(list[0])
+    const b = list[0]
+    const amt = Number(b.amount)
+    return c.json({
+        id: b.id,
+        name: b.category?.name || 'Budget',
+        amount: amt,
+        currencyId: b.currency_id,
+        currency: b.currency || { id: 1, code: 'EUR', symbol: '€', decimals: 2 },
+        period: b.period,
+        periodLabel: b.period === 'yearly' ? 'Yearly' : 'Monthly',
+        isGlobal: false,
+        isActive: true,
+        categories: b.category ? [b.category] : [],
+        tags: [],
+        category_id: b.category_id,
+        category: b.category,
+    })
 })
 
 // Create budget

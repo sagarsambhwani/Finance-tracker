@@ -12,23 +12,62 @@ router.use('*', async (c, next) => {
     await next()
 })
 
+function formatRule(r: any) {
+    let rawConditions: any = []
+    try {
+        rawConditions = JSON.parse(r.conditions || '[]')
+    } catch {
+        rawConditions = []
+    }
+
+    const conditions = Array.isArray(rawConditions)
+        ? { match: 'all', conditions: rawConditions }
+        : rawConditions || { match: 'all', conditions: [] }
+
+    let actions = []
+    try {
+        actions = JSON.parse(r.actions || '[]')
+    } catch {
+        actions = []
+    }
+
+    const triggerType = r.triggerType || 'on_transaction_create'
+    const triggerLabel = triggerType === 'on_transaction_update' ? 'On Transaction Update' : 'On Transaction Create'
+
+    return {
+        id: r.id,
+        name: r.name,
+        description: r.description || null,
+        trigger_type: triggerType,
+        trigger_label: triggerLabel,
+        priority: Number(r.priority || 50),
+        conditions,
+        actions,
+        is_active: Boolean(r.isActive),
+        stop_processing: Boolean(r.stopProcessing),
+        runs_count: Number(r.runsCount || 0),
+        last_run_at: r.updatedAt,
+        created_at: r.createdAt,
+        updated_at: r.updatedAt,
+        // camelCase aliases
+        isActive: Boolean(r.isActive),
+        stopProcessing: Boolean(r.stopProcessing),
+        runsCount: Number(r.runsCount || 0),
+    }
+}
+
 // List automation rules
 router.get('/', async (c) => {
     const list = await db.select().from(automationRules).orderBy(automationRules.priority)
-    const parsed = list.map(r => ({
-        ...r,
-        conditions: JSON.parse(r.conditions || '[]'),
-        actions: JSON.parse(r.actions || '[]'),
-    }))
-    return c.json({ data: parsed })
+    return c.json({ data: list.map(formatRule) })
 })
 
 // Supported triggers list
 router.get('/triggers', async (c) => {
     return c.json({
         data: [
-            { id: 'transaction_created', name: 'When transaction is created manually' },
-            { id: 'transaction_imported', name: 'When transaction is imported from bank statement' },
+            { value: 'on_transaction_create', label: 'On Transaction Create', description: 'When transaction is created' },
+            { value: 'on_transaction_update', label: 'On Transaction Update', description: 'When transaction is updated' },
         ],
     })
 })
@@ -38,11 +77,7 @@ router.get('/:id', async (c) => {
     const id = Number(c.req.param('id'))
     const rule = (await db.select().from(automationRules).where(eq(automationRules.id, id)))[0]
     if (!rule) return c.json({ message: 'Rule not found' }, 404)
-    return c.json({
-        ...rule,
-        conditions: JSON.parse(rule.conditions || '[]'),
-        actions: JSON.parse(rule.actions || '[]'),
-    })
+    return c.json(formatRule(rule))
 })
 
 // Create rule
@@ -53,7 +88,7 @@ router.post('/', async (c) => {
     const [rule] = await db.insert(automationRules).values({
         name: body.name,
         description: body.description || '',
-        triggerType: body.trigger_type || 'transaction_created',
+        triggerType: body.trigger_type || 'on_transaction_create',
         priority: Number(body.priority || 50),
         conditions: JSON.stringify(body.conditions || []),
         actions: JSON.stringify(body.actions || []),
@@ -64,11 +99,7 @@ router.post('/', async (c) => {
         updatedAt: now,
     }).returning()
 
-    return c.json({
-        ...rule,
-        conditions: JSON.parse(rule.conditions),
-        actions: JSON.parse(rule.actions),
-    }, 201)
+    return c.json(formatRule(rule), 201)
 })
 
 // Update rule
@@ -90,11 +121,7 @@ router.patch('/:id', async (c) => {
     const [updated] = await db.update(automationRules).set(updateData).where(eq(automationRules.id, id)).returning()
     if (!updated) return c.json({ message: 'Rule not found' }, 404)
 
-    return c.json({
-        ...updated,
-        conditions: JSON.parse(updated.conditions),
-        actions: JSON.parse(updated.actions),
-    })
+    return c.json(formatRule(updated))
 })
 
 // Toggle rule active status
