@@ -390,7 +390,7 @@ export default function DashboardPage() {
                 <p className="text-muted-foreground">Welcome to your finance dashboard</p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -473,8 +473,8 @@ export default function DashboardPage() {
                 </Card>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
-                <Card className="lg:col-span-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <Card className="lg:col-span-2 min-w-0">
                     <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <CardTitle>Balance Dynamics</CardTitle>
                         <div className="flex items-center gap-2">
@@ -495,7 +495,7 @@ export default function DashboardPage() {
                         </div>
                     </CardHeader>
                     {chartPeriod === 'custom' && (
-                        <div className="px-6 pb-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="px-4 sm:px-6 pb-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <Input
                                 type="date"
                                 value={customStartDate}
@@ -511,14 +511,16 @@ export default function DashboardPage() {
                             />
                         </div>
                     )}
-                    <CardContent>
+                    <CardContent className="min-w-0 overflow-hidden">
                         {historyData && historyData.series.length > 0 ? (
-                            <ReactECharts
-                                option={balanceChartOption}
-                                style={{ height: '250px' }}
-                                className="sm:[&]:!h-[300px]"
-                                opts={{ renderer: 'svg' }}
-                            />
+                            <div className="w-full min-w-0 overflow-hidden">
+                                <ReactECharts
+                                    option={balanceChartOption}
+                                    style={{ height: '250px' }}
+                                    className="sm:[&]:!h-[300px]"
+                                    opts={{ renderer: 'svg' }}
+                                />
+                            </div>
                         ) : (
                             <div className="flex items-center justify-center h-[250px] sm:h-[300px] text-muted-foreground">
                                 No data for this period
@@ -527,7 +529,7 @@ export default function DashboardPage() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="min-w-0">
                     <CardHeader>
                         <CardTitle>Account Balances</CardTitle>
                     </CardHeader>
@@ -537,9 +539,9 @@ export default function DashboardPage() {
                                 accounts.map((account) => (
                                     <div
                                         key={account.id}
-                                        className="flex items-center justify-between gap-2"
+                                        className="flex items-center justify-between gap-2 min-w-0"
                                     >
-                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                                             {(() => {
                                                 const config = ACCOUNT_TYPE_CONFIG[account.type as AccountType]
                                                 const Icon = config?.icon || Wallet
@@ -549,19 +551,19 @@ export default function DashboardPage() {
                                                     </div>
                                                 )
                                             })()}
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
                                                 <p className="text-sm font-medium truncate">{account.name}</p>
-                                                <p className="text-xs text-muted-foreground capitalize">
+                                                <p className="text-xs text-muted-foreground capitalize truncate">
                                                     {ACCOUNT_TYPE_CONFIG[account.type as AccountType]?.label || account.type}
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="text-right">
-                                                <p className="text-sm font-mono font-medium">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                            <div className="text-right shrink-0">
+                                                <p className="text-sm font-mono font-medium whitespace-nowrap">
                                                     {(account.currentBalance ?? 0).toFixed(account.currency?.decimals ?? 2)}
                                                 </p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-xs text-muted-foreground whitespace-nowrap">
                                                     {account.currency?.symbol ?? ''}
                                                 </p>
                                             </div>
@@ -605,18 +607,20 @@ export default function DashboardPage() {
                 </Card>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Card className="min-w-0">
                     <CardHeader>
                         <CardTitle>Expenses by Category</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="min-w-0 overflow-hidden">
                         {expensesByCategory && expensesByCategory.data.some((c) => (c.totalAmount ?? 0) > 0) ? (
-                            <ReactECharts
-                                option={pieChartOption}
-                                style={{ height: '280px' }}
-                                opts={{ renderer: 'svg' }}
-                            />
+                            <div className="w-full min-w-0 overflow-hidden">
+                                <ReactECharts
+                                    option={pieChartOption}
+                                    style={{ height: '280px' }}
+                                    opts={{ renderer: 'svg' }}
+                                />
+                            </div>
                         ) : (
                             <div className="flex items-center justify-center h-[280px] text-muted-foreground">
                                 No expenses this month
@@ -625,7 +629,7 @@ export default function DashboardPage() {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="min-w-0">
                     <CardHeader className="flex flex-row items-center justify-between gap-2">
                         <CardTitle className="truncate">Recent Transactions</CardTitle>
                         <Button variant="ghost" size="sm" asChild className="shrink-0">
@@ -642,9 +646,9 @@ export default function DashboardPage() {
                                 recentTransactions.data.map((transaction) => (
                                     <div
                                         key={transaction.id}
-                                        className="flex items-center justify-between gap-3"
+                                        className="flex items-center justify-between gap-2 sm:gap-3 min-w-0"
                                     >
-                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                                             <div
                                                 className="flex size-9 shrink-0 items-center justify-center rounded-lg"
                                                 style={{
@@ -661,7 +665,7 @@ export default function DashboardPage() {
                                                     <CreditCard className="size-4" />
                                                 )}
                                             </div>
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
                                                 <p className="text-sm font-medium truncate">
                                                     {transaction.category?.name ||
                                                         transaction.description ||
@@ -676,12 +680,12 @@ export default function DashboardPage() {
                                         </div>
                                         <div className="text-right shrink-0">
                                             <p
-                                                className={`text-sm font-mono font-medium ${getTransactionColor(transaction.type)}`}
+                                                className={`text-sm font-mono font-medium whitespace-nowrap ${getTransactionColor(transaction.type)}`}
                                             >
                                                 {getTransactionSign(transaction.type)}
                                                 {transaction.amount.toFixed(transaction.account.currency?.decimals ?? 2)}
                                             </p>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="text-xs text-muted-foreground whitespace-nowrap">
                                                 {transaction.account.currency?.symbol ?? ''}
                                             </p>
                                         </div>
@@ -697,7 +701,7 @@ export default function DashboardPage() {
                 </Card>
             </div>
 
-            <Card>
+            <Card className="min-w-0">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                         <PiggyBank className="size-5" />
@@ -712,7 +716,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                     {activeBudgets.length > 0 ? (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             {activeBudgets.map((budget) => {
                                 const progress = budget.progress
                                 const percent = progress ? Math.min(progress.percent, 100) : 0
@@ -763,7 +767,7 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
 
-            <Card>
+            <Card className="min-w-0">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                         <HandCoins className="size-5" />
@@ -779,7 +783,7 @@ export default function DashboardPage() {
                 <CardContent>
                     {debtSummary && (debtSummary.total_i_owe > 0 || debtSummary.total_owed_to_me > 0) ? (
                         <div className="space-y-4">
-                            <div className="grid gap-4 sm:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                 <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/20">
                                     <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
                                         <TrendingDown className="size-4 text-red-600" />
@@ -820,7 +824,7 @@ export default function DashboardPage() {
                             </div>
 
                             {activeDebts.length > 0 && (
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                     {activeDebts.map((debt) => (
                                         <Link
                                             key={debt.id}
@@ -872,7 +876,7 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
 
-            <Card>
+            <Card className="min-w-0">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                         <Repeat className="size-5" />
@@ -887,7 +891,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                     {upcomingRecurring && upcomingRecurring.length > 0 ? (
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                             {upcomingRecurring.slice(0, 5).map((recurring) => (
                                 <Link
                                     key={recurring.id}

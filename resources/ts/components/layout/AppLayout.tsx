@@ -13,10 +13,10 @@ export function AppLayout() {
     return (
         <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <AppSidebar />
-            <SidebarInset className="min-h-screen flex flex-col">
+            <SidebarInset className="min-h-screen flex flex-col min-w-0 max-w-full overflow-x-hidden">
                 <ReadOnlyBanner />
                 <Header />
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 md:pb-6">
+                <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 max-w-full p-4 sm:p-6 pb-24 md:pb-6">
                     <Outlet />
                 </main>
                 <MobileNav />
