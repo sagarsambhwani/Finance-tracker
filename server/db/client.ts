@@ -3,11 +3,14 @@ import { createClient } from '@libsql/client/web'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from './schema'
 
-const hardcodedUrl = 'libsql://finance-tracker-sagarsambhwani.aws-eu-west-1.turso.io'
-const hardcodedToken = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTEzNjg5NjcsImlkIjoiMDFhMTE1ZTUtZTAwMS03Yjc0LThiZTUtOGVhYjA4MWJlOTI3Iiwia2lkIjoickhnU0Q0RnUwRzhFbG5udlFSbTQyeFJZck4wS1A1VURkTXhQcnN0bXNnOCIsInJpZCI6IjBmOTg4ZjhiLTc1YzQtNGYxZS1hMDRmLTAxM2YzZWRkZDRhNCJ9.yUy6GDwaV0Xz2Idsw8HwXM61X9raMDkP6xqNdxehKYrgWEtrVVM_uvjd2cSNT76WYIRo151P8OXz4DEcTIPgDg'
+export const url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || ''
+export const authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || ''
 
-export const url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || hardcodedUrl
-export const authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || hardcodedToken
+if (!url || !authToken) {
+    if (process.env.NODE_ENV !== 'production') {
+        console.warn('⚠️ TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is not set in environment.')
+    }
+}
 
 export const rawClient = createClient({
     url,

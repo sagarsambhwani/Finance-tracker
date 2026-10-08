@@ -262,10 +262,13 @@ var settings = sqliteTable("settings", {
 });
 
 // server/db/client.ts
-var hardcodedUrl = "libsql://finance-tracker-sagarsambhwani.aws-eu-west-1.turso.io";
-var hardcodedToken = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTEzNjg5NjcsImlkIjoiMDFhMTE1ZTUtZTAwMS03Yjc0LThiZTUtOGVhYjA4MWJlOTI3Iiwia2lkIjoickhnU0Q0RnUwRzhFbG5udlFSbTQyeFJZck4wS1A1VURkTXhQcnN0bXNnOCIsInJpZCI6IjBmOTg4ZjhiLTc1YzQtNGYxZS1hMDRmLTAxM2YzZWRkZDRhNCJ9.yUy6GDwaV0Xz2Idsw8HwXM61X9raMDkP6xqNdxehKYrgWEtrVVM_uvjd2cSNT76WYIRo151P8OXz4DEcTIPgDg";
-var url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || hardcodedUrl;
-var authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || hardcodedToken;
+var url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || "";
+var authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || "";
+if (!url || !authToken) {
+  if (process.env.NODE_ENV !== "production") {
+    console.warn("\u26A0\uFE0F TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is not set in environment.");
+  }
+}
 var rawClient = createClient({
   url,
   authToken,
@@ -2748,12 +2751,22 @@ app.route("/automation-rules", automation_default);
 app.route("/settings", settings_default);
 app.route("/timezones", timezones_default);
 app.route("/monitoring", monitoring_default);
-app.get("/accounts-balance-history", (c) => c.json({ dates: [], series: [], currency: "\u20AC", decimals: 2 }));
-app.get("/accounts-balance-comparison", (c) => c.json({ current: 0, previous: null, currency: "\u20AC", decimals: 2 }));
+app.get("/accounts-balance-history", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ message: "Unauthorized" }, 401);
+  return c.json({ dates: [], series: [], currency: "\u20AC", decimals: 2 });
+});
+app.get("/accounts-balance-comparison", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ message: "Unauthorized" }, 401);
+  return c.json({ current: 0, previous: null, currency: "\u20AC", decimals: 2 });
+});
 app.get("/categories-summary", async (c) => {
   return c.redirect("/api/categories/summary");
 });
 app.get("/transactions-summary", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ message: "Unauthorized" }, 401);
   return c.json(await getTransactionSummary());
 });
 app.get("/debts-summary", async (c) => {
@@ -2773,35 +2786,12 @@ app.get("/health", async (c) => {
   try {
     await rawClient.execute("SELECT 1");
     return c.json({ status: "ok", database: "connected", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
-  } catch (e) {
-    let rawInfo = null;
-    try {
-      const tursoUrl = url.replace("libsql://", "https://") + "/v2/pipeline";
-      const tursoRes = await fetch(tursoUrl, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${authToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          requests: [{ type: "execute", stmt: { sql: "SELECT 1" } }, { type: "close" }]
-        })
-      });
-      rawInfo = {
-        status: tursoRes.status,
-        body: await tursoRes.text(),
-        token_len: authToken.length,
-        turso_host: tursoUrl
-      };
-    } catch (fetchErr) {
-      rawInfo = { fetch_error: fetchErr.message };
-    }
+  } catch {
     return c.json({
       status: "degraded",
-      database_error: e.message,
-      raw_turso: rawInfo,
+      database: "error",
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    });
+    }, 503);
   }
 });
 

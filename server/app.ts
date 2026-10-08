@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import auth from './routes/auth'
+import auth, { getAuthUser } from './routes/auth'
 import accounts, { getAccountsSummary } from './routes/accounts'
 import categories from './routes/categories'
 import currencies from './routes/currencies'
@@ -52,13 +52,22 @@ app.route('/timezones', timezones)
 app.route('/monitoring', monitoring)
 
 // Top-level aliases for frontend compatibility
-app.get('/accounts-balance-history', (c) => c.json({ dates: [], series: [], currency: '€', decimals: 2 }))
-app.get('/accounts-balance-comparison', (c) => c.json({ current: 0, previous: null, currency: '€', decimals: 2 }))
+app.get('/accounts-balance-history', async (c) => {
+    const user = await getAuthUser(c)
+    if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    return c.json({ dates: [], series: [], currency: '€', decimals: 2 })
+})
+app.get('/accounts-balance-comparison', async (c) => {
+    const user = await getAuthUser(c)
+    if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    return c.json({ current: 0, previous: null, currency: '€', decimals: 2 })
+})
 app.get('/categories-summary', async (c) => {
-    // Forward to categories summary
     return c.redirect('/api/categories/summary')
 })
 app.get('/transactions-summary', async (c) => {
+    const user = await getAuthUser(c)
+    if (!user) return c.json({ message: 'Unauthorized' }, 401)
     return c.json(await getTransactionSummary())
 })
 app.get('/debts-summary', async (c) => {
@@ -84,35 +93,12 @@ app.get('/health', async (c) => {
     try {
         await rawClient.execute('SELECT 1')
         return c.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() })
-    } catch (e: any) {
-        let rawInfo: any = null
-        try {
-            const tursoUrl = url.replace('libsql://', 'https://') + '/v2/pipeline'
-            const tursoRes = await fetch(tursoUrl, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${authToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    requests: [{ type: 'execute', stmt: { sql: 'SELECT 1' } }, { type: 'close' }]
-                })
-            })
-            rawInfo = {
-                status: tursoRes.status,
-                body: await tursoRes.text(),
-                token_len: authToken.length,
-                turso_host: tursoUrl
-            }
-        } catch (fetchErr: any) {
-            rawInfo = { fetch_error: fetchErr.message }
-        }
+    } catch {
         return c.json({
             status: 'degraded',
-            database_error: e.message,
-            raw_turso: rawInfo,
+            database: 'error',
             timestamp: new Date().toISOString()
-        })
+        }, 503)
     }
 })
 
