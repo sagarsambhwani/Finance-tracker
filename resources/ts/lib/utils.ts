@@ -102,6 +102,11 @@ const CATEGORY_ICON_MAP: Record<string, string> = {
     book: '📚',
     phone: '📱',
     plane: '✈️',
+    coffee: '☕',
+    'more-horizontal': '📦',
+    miscellaneous: '📦',
+    misc: '📦',
+    ellipsis: '📦',
 }
 
 export function formatCategoryIcon(icon?: string | null): string {

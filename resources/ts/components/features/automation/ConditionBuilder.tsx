@@ -12,6 +12,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import type { Condition, ConditionGroup, ConditionOperator } from '@/types/automation'
 import { CONDITION_FIELDS } from '@/types/automation'
 import { useAccounts, useCategories, useTags } from '@/hooks'
+import { formatCategoryIcon } from '@/lib/utils'
 
 interface ConditionBuilderProps {
     value: ConditionGroup
@@ -181,7 +182,7 @@ export function ConditionBuilder({ value, onChange }: ConditionBuilderProps) {
                     <SelectContent>
                         {categories?.map(category => (
                             <SelectItem key={category.id} value={String(category.id)}>
-                                {category.icon} {category.name}
+                                {formatCategoryIcon(category.icon)} {category.name}
                             </SelectItem>
                         ))}
                     </SelectContent>

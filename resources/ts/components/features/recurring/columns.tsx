@@ -22,7 +22,7 @@ import {
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { RecurringTransaction } from '@/types'
-import { cn, formatDate, toDateString, today } from '@/lib/utils'
+import { cn, formatDate, toDateString, today, formatCategoryIcon } from '@/lib/utils'
 
 const typeConfig = {
     income: { icon: ArrowDownLeft, color: 'text-green-500', label: 'Income' },
@@ -99,7 +99,7 @@ export const createRecurringColumns = ({
                         className="w-5 h-5 rounded flex items-center justify-center text-xs text-white"
                         style={{ backgroundColor: row.original.category.color }}
                     >
-                        {row.original.category.icon}
+                        {formatCategoryIcon(row.original.category.icon)}
                     </span>
                     <span>{row.original.category.name}</span>
                 </div>

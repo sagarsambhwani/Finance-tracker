@@ -34,7 +34,7 @@ import { Progress } from '@/components/ui/progress'
 import { useTotalBalance, useTransactions, useBalanceHistory, useAccounts, useCategorySummary, useBudgets, useDebtsWithSummary, useBalanceComparison, useUpcomingRecurring } from '@/hooks'
 import { useOverviewMetrics } from '@/hooks/use-reports'
 import type { ReportFilters } from '@/pages/reports/types'
-import { cn, formatAmount, parseDate, formatShortDate as formatDate } from '@/lib/utils'
+import { cn, formatAmount, parseDate, formatShortDate as formatDate, formatCategoryIcon } from '@/lib/utils'
 import { useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useTheme } from '@/hooks/use-theme'
@@ -659,7 +659,7 @@ export default function DashboardPage() {
                                             >
                                                 {transaction.category?.icon ? (
                                                     <span className="text-sm">
-                                                        {transaction.category.icon}
+                                                        {formatCategoryIcon(transaction.category.icon)}
                                                     </span>
                                                 ) : (
                                                     <CreditCard className="size-4" />

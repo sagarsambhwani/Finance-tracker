@@ -11,6 +11,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import type { Action, ActionType } from '@/types/automation'
 import { ACTION_TYPES } from '@/types/automation'
 import { useAccounts, useCategories, useTags } from '@/hooks'
+import { formatCategoryIcon } from '@/lib/utils'
 
 interface ActionBuilderProps {
     value: Action[]
@@ -54,7 +55,7 @@ export function ActionBuilder({ value, onChange }: ActionBuilderProps) {
                         <SelectContent>
                             {categories?.map(category => (
                                 <SelectItem key={category.id} value={String(category.id)}>
-                                    {category.icon} {category.name}
+                                    {formatCategoryIcon(category.icon)} {category.name}
                                 </SelectItem>
                             ))}
                         </SelectContent>

@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { MoreHorizontal, Pencil, Trash2, Copy, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ChevronRight, Banknote, HandCoins } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, formatCategoryIcon } from '@/lib/utils'
 
 const TYPE_CONFIG = {
     income: { icon: ArrowDownLeft, color: 'text-green-600', bg: 'bg-green-100', label: 'Income' },
@@ -111,7 +111,7 @@ export function createTransactionColumns(
                     return (
                         <span>
                             {account.name}
-                            {category && ` · ${category.icon} ${category.name}`}
+                            {category && ` · ${formatCategoryIcon(category.icon)} ${category.name}`}
                         </span>
                     )
                 }

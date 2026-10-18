@@ -32,7 +32,7 @@ import {
     HandCoins,
     ChevronDown,
 } from 'lucide-react'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, formatCategoryIcon } from '@/lib/utils'
 
 const TYPE_CONFIG = {
     income: { icon: ArrowDownLeft, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/10 text-green-600 dark:text-green-400', label: 'Income' },
@@ -96,7 +96,7 @@ export function MobileTransactionCard({
                             {category && (
                                 <>
                                     <span>·</span>
-                                    <span>{category.icon} {category.name}</span>
+                                    <span>{formatCategoryIcon(category.icon)} {category.name}</span>
                                 </>
                             )}
                             {isTransfer && toAccount && (

@@ -21,7 +21,7 @@ import {
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { MoreHorizontal, Pencil, Trash2, SkipForward, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from 'lucide-react'
-import { cn, formatDate, toDateString, today } from '@/lib/utils'
+import { cn, formatDate, toDateString, today, formatCategoryIcon } from '@/lib/utils'
 
 const typeConfig = {
     income: { icon: ArrowDownLeft, color: 'text-green-500 bg-green-500/10', label: 'Income' },
@@ -92,7 +92,7 @@ export function MobileRecurringCard({
                             {recurring.category && (
                                 <>
                                     <span>·</span>
-                                    <span>{recurring.category.icon} {recurring.category.name}</span>
+                                    <span>{formatCategoryIcon(recurring.category.icon)} {recurring.category.name}</span>
                                 </>
                             )}
                         </div>
