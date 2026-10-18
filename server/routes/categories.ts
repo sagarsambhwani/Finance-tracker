@@ -4,11 +4,12 @@ import { db } from '../db/client'
 import { categories, transactions, currencies } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
@@ -24,11 +25,12 @@ router.get('/', async (c) => {
 
 // Categories Summary by type
 router.get('/summary', async (c) => {
+    const user = c.get('user')
     const type = c.req.query('type') || 'expense'
     const baseCurr = (await db.select().from(currencies).where(eq(currencies.isBase, true)))[0] || { symbol: '€' }
 
     const cats = await db.select().from(categories).where(eq(categories.type, type as any))
-    const txs = await db.select().from(transactions).where(eq(transactions.type, type as any))
+    const txs = await db.select().from(transactions).where(and(eq(transactions.type, type as any), eq(transactions.userId, user.id)))
 
     const totalsByCat = new Map<number, number>()
     for (const t of txs) {
@@ -57,11 +59,12 @@ router.get('/summary', async (c) => {
 
 // Category statistics
 router.get('/:id/statistics', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const cat = (await db.select().from(categories).where(eq(categories.id, id)))[0]
     if (!cat) return c.json({ message: 'Category not found' }, 404)
 
-    const catTx = await db.select().from(transactions).where(eq(transactions.categoryId, id))
+    const catTx = await db.select().from(transactions).where(and(eq(transactions.categoryId, id), eq(transactions.userId, user.id)))
     const totalAmount = catTx.reduce((sum, t) => sum + Number(t.amount), 0)
 
     return c.json({

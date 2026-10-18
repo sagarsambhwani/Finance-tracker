@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS currencies (
 
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     debt_type TEXT,
@@ -136,6 +137,7 @@ CREATE TABLE IF NOT EXISTS tags (
 
 CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     to_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
@@ -167,6 +169,7 @@ CREATE TABLE IF NOT EXISTS transaction_tag (
 
 CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     currency_id INTEGER REFERENCES currencies(id),
     amount REAL NOT NULL,
@@ -183,6 +186,7 @@ CREATE TABLE IF NOT EXISTS budget_tag (
 
 CREATE TABLE IF NOT EXISTS recurring_transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     to_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
@@ -211,6 +215,7 @@ CREATE TABLE IF NOT EXISTS recurring_transaction_tag (
 
 CREATE TABLE IF NOT EXISTS automation_rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
     trigger_type TEXT NOT NULL,

@@ -4,11 +4,12 @@ import { db } from '../db/client'
 import { transactions, accounts, categories, currencies } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
@@ -18,8 +19,9 @@ async function getBaseCurrency() {
 
 // 1. Overview metrics
 router.get('/overview', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
-    const allTx = await db.select().from(transactions)
+    const allTx = await db.select().from(transactions).where(eq(transactions.userId, user.id))
 
     let income = 0
     let expenses = 0
@@ -43,6 +45,7 @@ router.get('/overview', async (c) => {
 
 // 2. Money Flow (Sankey Diagram)
 router.get('/money-flow', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
     const allTx = await db.select({
         type: transactions.type,
@@ -53,6 +56,7 @@ router.get('/money-flow', async (c) => {
     .from(transactions)
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(eq(transactions.userId, user.id))
 
     const nodesMap = new Map<string, string>()
     const linksMap = new Map<string, number>()
@@ -104,12 +108,13 @@ router.get('/money-flow', async (c) => {
 
 // 3. Expense Pace
 router.get('/expense-pace', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
     const now = new Date()
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
     const currentDay = now.getDate()
 
-    const allTx = await db.select().from(transactions).where(eq(transactions.type, 'expense'))
+    const allTx = await db.select().from(transactions).where(and(eq(transactions.type, 'expense'), eq(transactions.userId, user.id)))
     let totalSpent = 0
     const dailyExpenses = new Array(daysInMonth).fill(0)
 
@@ -144,6 +149,7 @@ router.get('/expense-pace', async (c) => {
 
 // 4. Expenses by Category
 router.get('/expenses-by-category', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
     const txList = await db.select({
         categoryId: transactions.categoryId,
@@ -154,7 +160,7 @@ router.get('/expenses-by-category', async (c) => {
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(eq(transactions.type, 'expense'))
+    .where(and(eq(transactions.type, 'expense'), eq(transactions.userId, user.id)))
 
     const categoryTotals = new Map<number, { id: number, name: string, icon: string, color: string, current: number }>()
 
@@ -179,8 +185,9 @@ router.get('/expenses-by-category', async (c) => {
 
 // 5. Cash Flow Over Time
 router.get('/cash-flow-over-time', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
-    const allTx = await db.select().from(transactions).orderBy(transactions.date)
+    const allTx = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(transactions.date)
 
     const dateMap = new Map<string, { income: number, expenses: number }>()
     for (const tx of allTx) {
@@ -210,8 +217,9 @@ router.get('/cash-flow-over-time', async (c) => {
 
 // 6. Activity Heatmap
 router.get('/activity-heatmap', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
-    const allTx = await db.select().from(transactions)
+    const allTx = await db.select().from(transactions).where(eq(transactions.userId, user.id))
 
     const dateMap = new Map<string, { count: number, value: number }>()
     let max = 0
@@ -240,9 +248,10 @@ router.get('/activity-heatmap', async (c) => {
 
 // 7. Transaction summary
 router.get('/transactions/summary', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
     const type = c.req.query('type') || 'expense'
-    const txList = await db.select().from(transactions).where(eq(transactions.type, type as any))
+    const txList = await db.select().from(transactions).where(and(eq(transactions.type, type as any), eq(transactions.userId, user.id)))
 
     const total = txList.reduce((sum, t) => sum + Number(t.amount), 0)
     const daysInPeriod = 30
@@ -263,6 +272,7 @@ router.get('/transactions/summary', async (c) => {
 
 // 8. Transactions by category
 router.get('/transactions/by-category', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
     const type = c.req.query('type') || 'expense'
 
@@ -275,7 +285,7 @@ router.get('/transactions/by-category', async (c) => {
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(eq(transactions.type, type as any))
+    .where(and(eq(transactions.type, type as any), eq(transactions.userId, user.id)))
 
     let total = 0
     const catMap = new Map<number, { id: number, name: string, icon: string, color: string, value: number }>()
@@ -319,6 +329,7 @@ router.get('/transactions/dynamics', async (c) => {
 
 // 10. Top transactions
 router.get('/transactions/top', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
     const type = c.req.query('type') || 'expense'
     const limit = Number(c.req.query('limit') || 10)
@@ -338,7 +349,7 @@ router.get('/transactions/top', async (c) => {
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))
-    .where(eq(transactions.type, type as any))
+    .where(and(eq(transactions.type, type as any), eq(transactions.userId, user.id)))
     .orderBy(desc(transactions.amount))
     .limit(limit)
 
@@ -367,8 +378,9 @@ router.get('/transactions/top', async (c) => {
 
 // 11. Net worth
 router.get('/net-worth', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
-    const accList = await db.select().from(accounts).where(eq(accounts.isArchived, false))
+    const accList = await db.select().from(accounts).where(and(eq(accounts.isArchived, false), eq(accounts.userId, user.id)))
     const total = accList.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0)
 
     const mappedAccounts = accList.map(a => ({
@@ -391,8 +403,9 @@ router.get('/net-worth', async (c) => {
 
 // 12. Net worth history
 router.get('/net-worth-history', async (c) => {
+    const user = c.get('user')
     const baseCurr = await getBaseCurrency()
-    const accList = await db.select().from(accounts).where(eq(accounts.isArchived, false))
+    const accList = await db.select().from(accounts).where(and(eq(accounts.isArchived, false), eq(accounts.userId, user.id)))
     const total = accList.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0)
 
     return c.json({

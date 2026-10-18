@@ -15,8 +15,12 @@ router.use('*', async (c, next) => {
     await next()
 })
 
-async function getAccountsSummary() {
-    const list = await db.select().from(accounts).where(and(ne(accounts.type, 'debt'), eq(accounts.isActive, true)))
+async function getAccountsSummary(userId?: number) {
+    const conditions = [ne(accounts.type, 'debt'), eq(accounts.isActive, true)]
+    if (userId !== undefined) {
+        conditions.push(eq(accounts.userId, userId))
+    }
+    const list = await db.select().from(accounts).where(and(...conditions))
     const baseCurr = (await db.select().from(currencies).where(eq(currencies.isBase, true)))[0] || { symbol: '€', code: 'EUR', decimals: 2 }
 
     const totalBalance = list.reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
@@ -31,11 +35,12 @@ async function getAccountsSummary() {
 
 // List accounts
 router.get('/', async (c) => {
+    const user = c.get('user')
     const withSummary = c.req.query('with_summary') === 'true'
     const excludeDebts = c.req.query('exclude_debts') === 'true'
     const activeOnly = c.req.query('active') === 'true'
 
-    const conditions = []
+    const conditions = [eq(accounts.userId, user.id)]
     if (excludeDebts) conditions.push(ne(accounts.type, 'debt'))
     if (activeOnly) conditions.push(eq(accounts.isActive, true))
 
@@ -52,7 +57,7 @@ router.get('/', async (c) => {
     })
     .from(accounts)
     .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(accounts.id))
 
     const mapped = list.map(a => ({
@@ -67,7 +72,7 @@ router.get('/', async (c) => {
 
     const res: any = { data: mapped }
     if (withSummary) {
-        res.summary = await getAccountsSummary()
+        res.summary = await getAccountsSummary(user.id)
     }
 
     return c.json(res)
@@ -75,10 +80,12 @@ router.get('/', async (c) => {
 
 // Create account
 router.post('/', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const now = new Date().toISOString()
 
     const [account] = await db.insert(accounts).values({
+        userId: user.id,
         name: body.name,
         type: body.type || 'bank',
         currencyId: Number(body.currency_id || 1),
@@ -95,14 +102,16 @@ router.post('/', async (c) => {
 
 // Get account by ID
 router.get('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const account = (await db.select().from(accounts).where(eq(accounts.id, id)))[0]
+    const account = (await db.select().from(accounts).where(and(eq(accounts.id, id), eq(accounts.userId, user.id))))[0]
     if (!account) return c.json({ message: 'Account not found' }, 404)
     return c.json(account)
 })
 
 // Update account (PUT and PATCH)
 const handleUpdate = async (c: any) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const body = await c.req.json()
     const now = new Date().toISOString()
@@ -116,7 +125,7 @@ const handleUpdate = async (c: any) => {
     if (body.icon !== undefined) updateData.icon = body.icon
     if (body.is_active !== undefined) updateData.isActive = Boolean(body.is_active)
 
-    const [updated] = await db.update(accounts).set(updateData).where(eq(accounts.id, id)).returning()
+    const [updated] = await db.update(accounts).set(updateData).where(and(eq(accounts.id, id), eq(accounts.userId, user.id))).returning()
     if (!updated) return c.json({ message: 'Account not found' }, 404)
 
     return c.json(updated)
@@ -127,8 +136,9 @@ router.patch('/:id', handleUpdate)
 
 // Delete account
 router.delete('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    await db.delete(accounts).where(eq(accounts.id, id))
+    await db.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.userId, user.id)))
     return c.json({ message: 'Account deleted' })
 })
 

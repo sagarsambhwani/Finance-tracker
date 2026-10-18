@@ -74,6 +74,7 @@ export const currencies = sqliteTable('currencies', {
 // ==========================================
 export const accounts = sqliteTable('accounts', {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     type: text('type', { enum: ['bank', 'crypto', 'cash', 'debt'] }).notNull(),
     debtType: text('debt_type', { enum: ['i_owe', 'owed_to_me'] }),
@@ -122,6 +123,7 @@ export const tags = sqliteTable('tags', {
 // ==========================================
 export const transactions = sqliteTable('transactions', {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
     type: text('type', { enum: ['income', 'expense', 'transfer', 'debt_payment', 'debt_collection'] }).notNull(),
     accountId: integer('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
     toAccountId: integer('to_account_id').references(() => accounts.id, { onDelete: 'set null' }),
@@ -135,6 +137,7 @@ export const transactions = sqliteTable('transactions', {
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
 }, (table) => [
+    index('transactions_user_id_idx').on(table.userId),
     index('transactions_date_idx').on(table.date),
     index('transactions_type_idx').on(table.type),
     index('transactions_account_date_idx').on(table.accountId, table.date),
@@ -162,6 +165,7 @@ export const transactionTag = sqliteTable('transaction_tag', {
 // ==========================================
 export const budgets = sqliteTable('budgets', {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
     categoryId: integer('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
     currencyId: integer('currency_id').references(() => currencies.id),
     amount: real('amount').notNull(),
@@ -182,6 +186,7 @@ export const budgetTag = sqliteTable('budget_tag', {
 // ==========================================
 export const recurringTransactions = sqliteTable('recurring_transactions', {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
     type: text('type', { enum: ['income', 'expense', 'transfer'] }).notNull(),
     accountId: integer('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
     toAccountId: integer('to_account_id').references(() => accounts.id, { onDelete: 'set null' }),
@@ -216,6 +221,7 @@ export const recurringTransactionTag = sqliteTable('recurring_transaction_tag', 
 // ==========================================
 export const automationRules = sqliteTable('automation_rules', {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
     triggerType: text('trigger_type', { length: 50 }).notNull(), // 'transaction_created', 'transaction_imported'

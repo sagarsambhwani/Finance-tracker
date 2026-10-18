@@ -107,6 +107,7 @@ var currencies = sqliteTable("currencies", {
 });
 var accounts = sqliteTable("accounts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   type: text("type", { enum: ["bank", "crypto", "cash", "debt"] }).notNull(),
   debtType: text("debt_type", { enum: ["i_owe", "owed_to_me"] }),
@@ -146,6 +147,7 @@ var tags = sqliteTable("tags", {
 });
 var transactions = sqliteTable("transactions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   type: text("type", { enum: ["income", "expense", "transfer", "debt_payment", "debt_collection"] }).notNull(),
   accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
   toAccountId: integer("to_account_id").references(() => accounts.id, { onDelete: "set null" }),
@@ -160,6 +162,7 @@ var transactions = sqliteTable("transactions", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull()
 }, (table) => [
+  index("transactions_user_id_idx").on(table.userId),
   index("transactions_date_idx").on(table.date),
   index("transactions_type_idx").on(table.type),
   index("transactions_account_date_idx").on(table.accountId, table.date),
@@ -181,6 +184,7 @@ var transactionTag = sqliteTable("transaction_tag", {
 ]);
 var budgets = sqliteTable("budgets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   categoryId: integer("category_id").notNull().references(() => categories.id, { onDelete: "cascade" }),
   currencyId: integer("currency_id").references(() => currencies.id),
   amount: real("amount").notNull(),
@@ -196,6 +200,7 @@ var budgetTag = sqliteTable("budget_tag", {
 ]);
 var recurringTransactions = sqliteTable("recurring_transactions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   type: text("type", { enum: ["income", "expense", "transfer"] }).notNull(),
   accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
   toAccountId: integer("to_account_id").references(() => accounts.id, { onDelete: "set null" }),
@@ -225,6 +230,7 @@ var recurringTransactionTag = sqliteTable("recurring_transaction_tag", {
 ]);
 var automationRules = sqliteTable("automation_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
   triggerType: text("trigger_type", { length: 50 }).notNull(),
@@ -352,6 +358,7 @@ CREATE TABLE IF NOT EXISTS currencies (
 
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     debt_type TEXT,
@@ -391,6 +398,7 @@ CREATE TABLE IF NOT EXISTS tags (
 
 CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     to_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
@@ -422,6 +430,7 @@ CREATE TABLE IF NOT EXISTS transaction_tag (
 
 CREATE TABLE IF NOT EXISTS budgets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     currency_id INTEGER REFERENCES currencies(id),
     amount REAL NOT NULL,
@@ -438,6 +447,7 @@ CREATE TABLE IF NOT EXISTS budget_tag (
 
 CREATE TABLE IF NOT EXISTS recurring_transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     to_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
@@ -466,6 +476,7 @@ CREATE TABLE IF NOT EXISTS recurring_transaction_tag (
 
 CREATE TABLE IF NOT EXISTS automation_rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
     trigger_type TEXT NOT NULL,
@@ -743,8 +754,12 @@ router.use("*", async (c, next) => {
   c.set("user", user);
   await next();
 });
-async function getAccountsSummary() {
-  const list = await db.select().from(accounts).where(and(ne(accounts.type, "debt"), eq2(accounts.isActive, true)));
+async function getAccountsSummary(userId) {
+  const conditions = [ne(accounts.type, "debt"), eq2(accounts.isActive, true)];
+  if (userId !== void 0) {
+    conditions.push(eq2(accounts.userId, userId));
+  }
+  const list = await db.select().from(accounts).where(and(...conditions));
   const baseCurr = (await db.select().from(currencies).where(eq2(currencies.isBase, true)))[0] || { symbol: "\u20AC", code: "EUR", decimals: 2 };
   const totalBalance = list.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
   return {
@@ -756,10 +771,11 @@ async function getAccountsSummary() {
   };
 }
 router.get("/", async (c) => {
+  const user = c.get("user");
   const withSummary = c.req.query("with_summary") === "true";
   const excludeDebts = c.req.query("exclude_debts") === "true";
   const activeOnly = c.req.query("active") === "true";
-  const conditions = [];
+  const conditions = [eq2(accounts.userId, user.id)];
   if (excludeDebts) conditions.push(ne(accounts.type, "debt"));
   if (activeOnly) conditions.push(eq2(accounts.isActive, true));
   const list = await db.select({
@@ -772,7 +788,7 @@ router.get("/", async (c) => {
     icon: accounts.icon,
     is_active: accounts.isActive,
     currency: currencies
-  }).from(accounts).leftJoin(currencies, eq2(accounts.currencyId, currencies.id)).where(conditions.length > 0 ? and(...conditions) : void 0).orderBy(desc(accounts.id));
+  }).from(accounts).leftJoin(currencies, eq2(accounts.currencyId, currencies.id)).where(and(...conditions)).orderBy(desc(accounts.id));
   const mapped = list.map((a) => ({
     ...a,
     currencyId: a.currency_id,
@@ -784,14 +800,16 @@ router.get("/", async (c) => {
   }));
   const res = { data: mapped };
   if (withSummary) {
-    res.summary = await getAccountsSummary();
+    res.summary = await getAccountsSummary(user.id);
   }
   return c.json(res);
 });
 router.post("/", async (c) => {
+  const user = c.get("user");
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const [account] = await db.insert(accounts).values({
+    userId: user.id,
     name: body.name,
     type: body.type || "bank",
     currencyId: Number(body.currency_id || 1),
@@ -805,12 +823,14 @@ router.post("/", async (c) => {
   return c.json(account, 201);
 });
 router.get("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  const account = (await db.select().from(accounts).where(eq2(accounts.id, id)))[0];
+  const account = (await db.select().from(accounts).where(and(eq2(accounts.id, id), eq2(accounts.userId, user.id))))[0];
   if (!account) return c.json({ message: "Account not found" }, 404);
   return c.json(account);
 });
 var handleUpdate = async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -822,15 +842,16 @@ var handleUpdate = async (c) => {
   if (body.color !== void 0) updateData.color = body.color;
   if (body.icon !== void 0) updateData.icon = body.icon;
   if (body.is_active !== void 0) updateData.isActive = Boolean(body.is_active);
-  const [updated] = await db.update(accounts).set(updateData).where(eq2(accounts.id, id)).returning();
+  const [updated] = await db.update(accounts).set(updateData).where(and(eq2(accounts.id, id), eq2(accounts.userId, user.id))).returning();
   if (!updated) return c.json({ message: "Account not found" }, 404);
   return c.json(updated);
 };
 router.put("/:id", handleUpdate);
 router.patch("/:id", handleUpdate);
 router.delete("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  await db.delete(accounts).where(eq2(accounts.id, id));
+  await db.delete(accounts).where(and(eq2(accounts.id, id), eq2(accounts.userId, user.id)));
   return c.json({ message: "Account deleted" });
 });
 var accounts_default = router;
@@ -842,6 +863,7 @@ var router2 = new Hono3();
 router2.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
 router2.get("/", async (c) => {
@@ -852,10 +874,11 @@ router2.get("/", async (c) => {
   return c.json({ data: list });
 });
 router2.get("/summary", async (c) => {
+  const user = c.get("user");
   const type = c.req.query("type") || "expense";
   const baseCurr = (await db.select().from(currencies).where(eq3(currencies.isBase, true)))[0] || { symbol: "\u20AC" };
   const cats = await db.select().from(categories).where(eq3(categories.type, type));
-  const txs = await db.select().from(transactions).where(eq3(transactions.type, type));
+  const txs = await db.select().from(transactions).where(and2(eq3(transactions.type, type), eq3(transactions.userId, user.id)));
   const totalsByCat = /* @__PURE__ */ new Map();
   for (const t of txs) {
     if (t.categoryId) {
@@ -879,10 +902,11 @@ router2.get("/summary", async (c) => {
   });
 });
 router2.get("/:id/statistics", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const cat = (await db.select().from(categories).where(eq3(categories.id, id)))[0];
   if (!cat) return c.json({ message: "Category not found" }, 404);
-  const catTx = await db.select().from(transactions).where(eq3(transactions.categoryId, id));
+  const catTx = await db.select().from(transactions).where(and2(eq3(transactions.categoryId, id), eq3(transactions.userId, user.id)));
   const totalAmount = catTx.reduce((sum, t) => sum + Number(t.amount), 0);
   return c.json({
     category_id: cat.id,
@@ -1021,13 +1045,14 @@ var router4 = new Hono5();
 router4.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
 async function adjustBalance(accountId, delta) {
   await db.update(accounts).set({ balance: sql2`${accounts.balance} + ${delta}`, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq5(accounts.id, accountId));
 }
-async function getTransactionSummary() {
-  const allTx = await db.select().from(transactions);
+async function getTransactionSummary(userId) {
+  const allTx = userId !== void 0 ? await db.select().from(transactions).where(eq5(transactions.userId, userId)) : await db.select().from(transactions);
   const baseCurr = (await db.select().from(currencies).where(eq5(currencies.isBase, true)))[0] || { symbol: "\u20AC", code: "EUR", decimals: 2 };
   let income = 0;
   let expense = 0;
@@ -1046,8 +1071,9 @@ async function getTransactionSummary() {
   };
 }
 router4.get("/", async (c) => {
+  const user = c.get("user");
   const query = c.req.query();
-  const conditions = [];
+  const conditions = [eq5(transactions.userId, user.id)];
   if (query.type) conditions.push(eq5(transactions.type, query.type));
   if (query.account_id) conditions.push(eq5(transactions.accountId, Number(query.account_id)));
   if (query.category_id) conditions.push(eq5(transactions.categoryId, Number(query.category_id)));
@@ -1056,7 +1082,7 @@ router4.get("/", async (c) => {
   const page = Math.max(1, Number(query.page || 1));
   const perPage = Math.max(1, Number(query.per_page || 50));
   const offset = (page - 1) * perPage;
-  const whereClause = conditions.length > 0 ? and3(...conditions) : void 0;
+  const whereClause = and3(...conditions);
   const totalCount = (await db.select({ val: count() }).from(transactions).where(whereClause))[0]?.val || 0;
   const list = await db.select({
     id: transactions.id,
@@ -1093,14 +1119,16 @@ router4.get("/", async (c) => {
     }
   };
   if (query.with_summary === "true") {
-    response.summary = await getTransactionSummary();
+    response.summary = await getTransactionSummary(user.id);
   }
   return c.json(response);
 });
 router4.get("/summary", async (c) => {
-  return c.json(await getTransactionSummary());
+  const user = c.get("user");
+  return c.json(await getTransactionSummary(user.id));
 });
 router4.get("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const list = await db.select({
     id: transactions.id,
@@ -1116,7 +1144,7 @@ router4.get("/:id", async (c) => {
     account: accounts,
     category: categories,
     currency: currencies
-  }).from(transactions).leftJoin(accounts, eq5(transactions.accountId, accounts.id)).leftJoin(currencies, eq5(accounts.currencyId, currencies.id)).leftJoin(categories, eq5(transactions.categoryId, categories.id)).where(eq5(transactions.id, id));
+  }).from(transactions).leftJoin(accounts, eq5(transactions.accountId, accounts.id)).leftJoin(currencies, eq5(accounts.currencyId, currencies.id)).leftJoin(categories, eq5(transactions.categoryId, categories.id)).where(and3(eq5(transactions.id, id), eq5(transactions.userId, user.id)));
   if (list.length === 0) return c.json({ message: "Transaction not found" }, 404);
   const tx = list[0];
   return c.json({
@@ -1129,6 +1157,7 @@ router4.get("/:id", async (c) => {
   });
 });
 router4.post("/", async (c) => {
+  const user = c.get("user");
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const amount = Number(body.amount);
@@ -1137,6 +1166,7 @@ router4.post("/", async (c) => {
   const toAccountId = body.to_account_id ? Number(body.to_account_id) : null;
   const categoryId = body.category_id ? Number(body.category_id) : null;
   const [tx] = await db.insert(transactions).values({
+    userId: user.id,
     type,
     accountId,
     toAccountId,
@@ -1160,11 +1190,13 @@ router4.post("/", async (c) => {
   return c.json(tx, 201);
 });
 router4.post("/:id/duplicate", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  const tx = (await db.select().from(transactions).where(eq5(transactions.id, id)))[0];
+  const tx = (await db.select().from(transactions).where(and3(eq5(transactions.id, id), eq5(transactions.userId, user.id))))[0];
   if (!tx) return c.json({ message: "Transaction not found" }, 404);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const [newTx] = await db.insert(transactions).values({
+    userId: user.id,
     type: tx.type,
     accountId: tx.accountId,
     toAccountId: tx.toAccountId,
@@ -1188,10 +1220,11 @@ router4.post("/:id/duplicate", async (c) => {
   return c.json(newTx, 201);
 });
 var handleUpdate4 = async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const oldTx = (await db.select().from(transactions).where(eq5(transactions.id, id)))[0];
+  const oldTx = (await db.select().from(transactions).where(and3(eq5(transactions.id, id), eq5(transactions.userId, user.id))))[0];
   if (!oldTx) return c.json({ message: "Transaction not found" }, 404);
   if (oldTx.type === "income") {
     await adjustBalance(oldTx.accountId, -oldTx.amount);
@@ -1215,7 +1248,7 @@ var handleUpdate4 = async (c) => {
     description: body.description !== void 0 ? body.description : oldTx.description,
     date: body.date !== void 0 ? body.date : oldTx.date,
     updatedAt: now
-  }).where(eq5(transactions.id, id)).returning();
+  }).where(and3(eq5(transactions.id, id), eq5(transactions.userId, user.id))).returning();
   if (newType === "income") {
     await adjustBalance(newAccountId, newAmount);
   } else if (newType === "expense") {
@@ -1229,8 +1262,9 @@ var handleUpdate4 = async (c) => {
 router4.put("/:id", handleUpdate4);
 router4.patch("/:id", handleUpdate4);
 router4.delete("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  const tx = (await db.select().from(transactions).where(eq5(transactions.id, id)))[0];
+  const tx = (await db.select().from(transactions).where(and3(eq5(transactions.id, id), eq5(transactions.userId, user.id))))[0];
   if (!tx) return c.json({ message: "Transaction not found" }, 404);
   if (tx.type === "income") {
     await adjustBalance(tx.accountId, -tx.amount);
@@ -1240,21 +1274,23 @@ router4.delete("/:id", async (c) => {
     await adjustBalance(tx.accountId, tx.amount);
     await adjustBalance(tx.toAccountId, -(tx.toAmount || tx.amount));
   }
-  await db.delete(transactions).where(eq5(transactions.id, id));
+  await db.delete(transactions).where(and3(eq5(transactions.id, id), eq5(transactions.userId, user.id)));
   return c.json({ message: "Transaction deleted" });
 });
 var transactions_default = router4;
 
 // server/routes/budgets.ts
 import { Hono as Hono6 } from "hono";
-import { eq as eq6 } from "drizzle-orm";
+import { eq as eq6, and as and4 } from "drizzle-orm";
 var router5 = new Hono6();
 router5.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
 router5.get("/", async (c) => {
+  const user = c.get("user");
   const now = /* @__PURE__ */ new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
@@ -1266,8 +1302,8 @@ router5.get("/", async (c) => {
     period: budgets.period,
     category: categories,
     currency: currencies
-  }).from(budgets).leftJoin(categories, eq6(budgets.categoryId, categories.id)).leftJoin(currencies, eq6(budgets.currencyId, currencies.id));
-  const allExpenses = await db.select().from(transactions).where(eq6(transactions.type, "expense"));
+  }).from(budgets).leftJoin(categories, eq6(budgets.categoryId, categories.id)).leftJoin(currencies, eq6(budgets.currencyId, currencies.id)).where(eq6(budgets.userId, user.id));
+  const allExpenses = await db.select().from(transactions).where(and4(eq6(transactions.type, "expense"), eq6(transactions.userId, user.id)));
   const mapped = list.map((b) => {
     const amt = Number(b.amount);
     const spent = allExpenses.filter((t) => t.categoryId === b.category_id && t.date >= startOfMonth && t.date <= endOfMonth).reduce((sum, t) => sum + Number(t.amount), 0);
@@ -1307,6 +1343,7 @@ router5.get("/", async (c) => {
   return c.json({ data: mapped });
 });
 router5.get("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const list = await db.select({
     id: budgets.id,
@@ -1316,7 +1353,7 @@ router5.get("/:id", async (c) => {
     period: budgets.period,
     category: categories,
     currency: currencies
-  }).from(budgets).leftJoin(categories, eq6(budgets.categoryId, categories.id)).leftJoin(currencies, eq6(budgets.currencyId, currencies.id)).where(eq6(budgets.id, id));
+  }).from(budgets).leftJoin(categories, eq6(budgets.categoryId, categories.id)).leftJoin(currencies, eq6(budgets.currencyId, currencies.id)).where(and4(eq6(budgets.id, id), eq6(budgets.userId, user.id)));
   if (list.length === 0) return c.json({ message: "Budget not found" }, 404);
   const b = list[0];
   const amt = Number(b.amount);
@@ -1337,10 +1374,13 @@ router5.get("/:id", async (c) => {
   });
 });
 router5.post("/", async (c) => {
+  const user = c.get("user");
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const [budget] = await db.insert(budgets).values({
+    userId: user.id,
     categoryId: Number(body.category_id),
+    currencyId: body.currency_id ? Number(body.currency_id) : void 0,
     amount: Number(body.amount),
     period: body.period || "monthly",
     createdAt: now,
@@ -1349,6 +1389,7 @@ router5.post("/", async (c) => {
   return c.json(budget, 201);
 });
 var handleUpdate5 = async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -1357,34 +1398,37 @@ var handleUpdate5 = async (c) => {
     amount: body.amount !== void 0 ? Number(body.amount) : void 0,
     period: body.period,
     updatedAt: now
-  }).where(eq6(budgets.id, id)).returning();
+  }).where(and4(eq6(budgets.id, id), eq6(budgets.userId, user.id))).returning();
   if (!updated) return c.json({ message: "Budget not found" }, 404);
   return c.json(updated);
 };
 router5.put("/:id", handleUpdate5);
 router5.patch("/:id", handleUpdate5);
 router5.delete("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  await db.delete(budgets).where(eq6(budgets.id, id));
+  await db.delete(budgets).where(and4(eq6(budgets.id, id), eq6(budgets.userId, user.id)));
   return c.json({ message: "Budget deleted" });
 });
 var budgets_default = router5;
 
 // server/routes/reports.ts
 import { Hono as Hono7 } from "hono";
-import { eq as eq7, desc as desc3 } from "drizzle-orm";
+import { eq as eq7, and as and5, desc as desc3 } from "drizzle-orm";
 var router6 = new Hono7();
 router6.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
 async function getBaseCurrency() {
   return (await db.select().from(currencies).where(eq7(currencies.isBase, true)))[0] || { symbol: "\u20AC", code: "EUR" };
 }
 router6.get("/overview", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
-  const allTx = await db.select().from(transactions);
+  const allTx = await db.select().from(transactions).where(eq7(transactions.userId, user.id));
   let income = 0;
   let expenses = 0;
   for (const tx of allTx) {
@@ -1402,13 +1446,14 @@ router6.get("/overview", async (c) => {
   });
 });
 router6.get("/money-flow", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
   const allTx = await db.select({
     type: transactions.type,
     amount: transactions.amount,
     accountName: accounts.name,
     categoryName: categories.name
-  }).from(transactions).leftJoin(accounts, eq7(transactions.accountId, accounts.id)).leftJoin(categories, eq7(transactions.categoryId, categories.id));
+  }).from(transactions).leftJoin(accounts, eq7(transactions.accountId, accounts.id)).leftJoin(categories, eq7(transactions.categoryId, categories.id)).where(eq7(transactions.userId, user.id));
   const nodesMap = /* @__PURE__ */ new Map();
   const linksMap = /* @__PURE__ */ new Map();
   let totalIncome = 0;
@@ -1451,11 +1496,12 @@ router6.get("/money-flow", async (c) => {
   });
 });
 router6.get("/expense-pace", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
   const now = /* @__PURE__ */ new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const currentDay = now.getDate();
-  const allTx = await db.select().from(transactions).where(eq7(transactions.type, "expense"));
+  const allTx = await db.select().from(transactions).where(and5(eq7(transactions.type, "expense"), eq7(transactions.userId, user.id)));
   let totalSpent = 0;
   const dailyExpenses = new Array(daysInMonth).fill(0);
   for (const tx of allTx) {
@@ -1486,6 +1532,7 @@ router6.get("/expense-pace", async (c) => {
   });
 });
 router6.get("/expenses-by-category", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
   const txList = await db.select({
     categoryId: transactions.categoryId,
@@ -1493,7 +1540,7 @@ router6.get("/expenses-by-category", async (c) => {
     categoryName: categories.name,
     categoryIcon: categories.icon,
     categoryColor: categories.color
-  }).from(transactions).leftJoin(categories, eq7(transactions.categoryId, categories.id)).where(eq7(transactions.type, "expense"));
+  }).from(transactions).leftJoin(categories, eq7(transactions.categoryId, categories.id)).where(and5(eq7(transactions.type, "expense"), eq7(transactions.userId, user.id)));
   const categoryTotals = /* @__PURE__ */ new Map();
   for (const tx of txList) {
     if (!tx.categoryId) continue;
@@ -1513,8 +1560,9 @@ router6.get("/expenses-by-category", async (c) => {
   });
 });
 router6.get("/cash-flow-over-time", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
-  const allTx = await db.select().from(transactions).orderBy(transactions.date);
+  const allTx = await db.select().from(transactions).where(eq7(transactions.userId, user.id)).orderBy(transactions.date);
   const dateMap = /* @__PURE__ */ new Map();
   for (const tx of allTx) {
     const d = tx.date;
@@ -1539,8 +1587,9 @@ router6.get("/cash-flow-over-time", async (c) => {
   });
 });
 router6.get("/activity-heatmap", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
-  const allTx = await db.select().from(transactions);
+  const allTx = await db.select().from(transactions).where(eq7(transactions.userId, user.id));
   const dateMap = /* @__PURE__ */ new Map();
   let max = 0;
   for (const tx of allTx) {
@@ -1563,9 +1612,10 @@ router6.get("/activity-heatmap", async (c) => {
   });
 });
 router6.get("/transactions/summary", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
   const type = c.req.query("type") || "expense";
-  const txList = await db.select().from(transactions).where(eq7(transactions.type, type));
+  const txList = await db.select().from(transactions).where(and5(eq7(transactions.type, type), eq7(transactions.userId, user.id)));
   const total = txList.reduce((sum, t) => sum + Number(t.amount), 0);
   const daysInPeriod = 30;
   const avgPerDay = Math.round(total / daysInPeriod * 100) / 100;
@@ -1582,6 +1632,7 @@ router6.get("/transactions/summary", async (c) => {
   });
 });
 router6.get("/transactions/by-category", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
   const type = c.req.query("type") || "expense";
   const txList = await db.select({
@@ -1590,7 +1641,7 @@ router6.get("/transactions/by-category", async (c) => {
     name: categories.name,
     icon: categories.icon,
     color: categories.color
-  }).from(transactions).leftJoin(categories, eq7(transactions.categoryId, categories.id)).where(eq7(transactions.type, type));
+  }).from(transactions).leftJoin(categories, eq7(transactions.categoryId, categories.id)).where(and5(eq7(transactions.type, type), eq7(transactions.userId, user.id)));
   let total = 0;
   const catMap = /* @__PURE__ */ new Map();
   for (const tx of txList) {
@@ -1626,6 +1677,7 @@ router6.get("/transactions/dynamics", async (c) => {
   });
 });
 router6.get("/transactions/top", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
   const type = c.req.query("type") || "expense";
   const limit = Number(c.req.query("limit") || 10);
@@ -1640,7 +1692,7 @@ router6.get("/transactions/top", async (c) => {
     categoryColor: categories.color,
     accountId: transactions.accountId,
     accountName: accounts.name
-  }).from(transactions).leftJoin(categories, eq7(transactions.categoryId, categories.id)).leftJoin(accounts, eq7(transactions.accountId, accounts.id)).where(eq7(transactions.type, type)).orderBy(desc3(transactions.amount)).limit(limit);
+  }).from(transactions).leftJoin(categories, eq7(transactions.categoryId, categories.id)).leftJoin(accounts, eq7(transactions.accountId, accounts.id)).where(and5(eq7(transactions.type, type), eq7(transactions.userId, user.id))).orderBy(desc3(transactions.amount)).limit(limit);
   const items = txList.map((tx) => ({
     id: tx.id,
     description: tx.description || "Transaction",
@@ -1663,8 +1715,9 @@ router6.get("/transactions/top", async (c) => {
   });
 });
 router6.get("/net-worth", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
-  const accList = await db.select().from(accounts).where(eq7(accounts.isArchived, false));
+  const accList = await db.select().from(accounts).where(and5(eq7(accounts.isArchived, false), eq7(accounts.userId, user.id)));
   const total = accList.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0);
   const mappedAccounts = accList.map((a) => ({
     id: a.id,
@@ -1683,8 +1736,9 @@ router6.get("/net-worth", async (c) => {
   });
 });
 router6.get("/net-worth-history", async (c) => {
+  const user = c.get("user");
   const baseCurr = await getBaseCurrency();
-  const accList = await db.select().from(accounts).where(eq7(accounts.isArchived, false));
+  const accList = await db.select().from(accounts).where(and5(eq7(accounts.isArchived, false), eq7(accounts.userId, user.id)));
   const total = accList.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0);
   return c.json({
     labels: [(/* @__PURE__ */ new Date()).toISOString().split("T")[0]],
@@ -1698,11 +1752,12 @@ var reports_default = router6;
 import { Hono as Hono8 } from "hono";
 import crypto2 from "crypto";
 import pdfParse from "pdf-parse";
-import { eq as eq8 } from "drizzle-orm";
+import { eq as eq8, and as and6 } from "drizzle-orm";
 var router7 = new Hono8();
 router7.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
 function parseAmountString(str) {
@@ -1803,6 +1858,7 @@ router7.post("/parse", async (c) => {
   });
 });
 router7.post("/execute", async (c) => {
+  const user = c.get("user");
   const { account_id, rows } = await c.req.json();
   const accountId = Number(account_id);
   if (!accountId || !Array.isArray(rows)) {
@@ -1813,7 +1869,7 @@ router7.post("/execute", async (c) => {
   let skippedDuplicates = 0;
   let netBalanceChange = 0;
   for (const row of rows) {
-    const existing = await db.select().from(transactions).where(eq8(transactions.dedupHash, row.hash)).limit(1);
+    const existing = await db.select().from(transactions).where(and6(eq8(transactions.dedupHash, row.hash), eq8(transactions.userId, user.id))).limit(1);
     if (existing.length > 0) {
       skippedDuplicates++;
       continue;
@@ -1821,6 +1877,7 @@ router7.post("/execute", async (c) => {
     const type = row.amount >= 0 ? "income" : "expense";
     const absAmount = Math.abs(row.amount);
     await db.insert(transactions).values({
+      userId: user.id,
       type,
       accountId,
       amount: absAmount,
@@ -1833,9 +1890,9 @@ router7.post("/execute", async (c) => {
     netBalanceChange += row.amount;
     insertedCount++;
   }
-  const account = (await db.select().from(accounts).where(eq8(accounts.id, accountId)))[0];
+  const account = (await db.select().from(accounts).where(and6(eq8(accounts.id, accountId), eq8(accounts.userId, user.id))))[0];
   if (account) {
-    await db.update(accounts).set({ balance: account.balance + netBalanceChange, updatedAt: now }).where(eq8(accounts.id, accountId));
+    await db.update(accounts).set({ balance: account.balance + netBalanceChange, updatedAt: now }).where(and6(eq8(accounts.id, accountId), eq8(accounts.userId, user.id)));
   }
   return c.json({
     inserted: insertedCount,
@@ -1942,15 +1999,20 @@ var backups_default = router8;
 
 // server/routes/debts.ts
 import { Hono as Hono10 } from "hono";
-import { eq as eq9, and as and5, sql as sql3 } from "drizzle-orm";
+import { eq as eq9, and as and7, sql as sql3 } from "drizzle-orm";
 var router9 = new Hono10();
 router9.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
-async function getDebtsSummary() {
-  const debts = await db.select().from(accounts).where(and5(eq9(accounts.type, "debt"), eq9(accounts.isPaidOff, false)));
+async function getDebtsSummary(userId) {
+  const conditions = [eq9(accounts.type, "debt"), eq9(accounts.isPaidOff, false)];
+  if (userId !== void 0) {
+    conditions.push(eq9(accounts.userId, userId));
+  }
+  const debts = await db.select().from(accounts).where(and7(...conditions));
   const baseCurr = (await db.select().from(currencies).where(eq9(currencies.isBase, true)))[0] || { symbol: "\u20AC", decimals: 2 };
   let totalIOwe = 0;
   let totalOwedToMe = 0;
@@ -2004,9 +2066,10 @@ function mapDebt(d) {
   };
 }
 router9.get("/", async (c) => {
+  const user = c.get("user");
   const includeCompleted = c.req.query("include_completed") === "true";
   const withSummary = c.req.query("with_summary") === "true";
-  const conditions = [eq9(accounts.type, "debt")];
+  const conditions = [eq9(accounts.type, "debt"), eq9(accounts.userId, user.id)];
   if (!includeCompleted) {
     conditions.push(eq9(accounts.isPaidOff, false));
   }
@@ -2025,18 +2088,20 @@ router9.get("/", async (c) => {
     isActive: accounts.isActive,
     createdAt: accounts.createdAt,
     currency: currencies
-  }).from(accounts).leftJoin(currencies, eq9(accounts.currencyId, currencies.id)).where(and5(...conditions));
+  }).from(accounts).leftJoin(currencies, eq9(accounts.currencyId, currencies.id)).where(and7(...conditions));
   const mapped = list.map(mapDebt);
   const response = { data: mapped };
   if (withSummary) {
-    response.summary = await getDebtsSummary();
+    response.summary = await getDebtsSummary(user.id);
   }
   return c.json(response);
 });
 router9.get("/summary", async (c) => {
-  return c.json(await getDebtsSummary());
+  const user = c.get("user");
+  return c.json(await getDebtsSummary(user.id));
 });
 router9.get("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const list = await db.select({
     id: accounts.id,
@@ -2053,14 +2118,16 @@ router9.get("/:id", async (c) => {
     isActive: accounts.isActive,
     createdAt: accounts.createdAt,
     currency: currencies
-  }).from(accounts).leftJoin(currencies, eq9(accounts.currencyId, currencies.id)).where(and5(eq9(accounts.id, id), eq9(accounts.type, "debt")));
+  }).from(accounts).leftJoin(currencies, eq9(accounts.currencyId, currencies.id)).where(and7(eq9(accounts.id, id), eq9(accounts.type, "debt"), eq9(accounts.userId, user.id)));
   if (list.length === 0) return c.json({ message: "Debt not found" }, 404);
   return c.json(mapDebt(list[0]));
 });
 router9.post("/", async (c) => {
+  const user = c.get("user");
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const [newDebt] = await db.insert(accounts).values({
+    userId: user.id,
     name: body.name,
     type: "debt",
     debtType: body.debt_type || body.debtType,
@@ -2078,6 +2145,7 @@ router9.post("/", async (c) => {
   return c.json(mapDebt(newDebt), 201);
 });
 router9.patch("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -2096,28 +2164,31 @@ router9.patch("/:id", async (c) => {
   if (body.currency_id !== void 0 || body.currencyId !== void 0) {
     updateData.currencyId = Number(body.currency_id ?? body.currencyId);
   }
-  const [updated] = await db.update(accounts).set(updateData).where(and5(eq9(accounts.id, id), eq9(accounts.type, "debt"))).returning();
+  const [updated] = await db.update(accounts).set(updateData).where(and7(eq9(accounts.id, id), eq9(accounts.type, "debt"), eq9(accounts.userId, user.id))).returning();
   if (!updated) return c.json({ message: "Debt not found" }, 404);
   return c.json(mapDebt(updated));
 });
 router9.delete("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  await db.delete(accounts).where(and5(eq9(accounts.id, id), eq9(accounts.type, "debt")));
+  await db.delete(accounts).where(and7(eq9(accounts.id, id), eq9(accounts.type, "debt"), eq9(accounts.userId, user.id)));
   return c.json({ message: "Debt deleted" });
 });
 router9.post("/:id/payment", async (c) => {
+  const user = c.get("user");
   const debtId = Number(c.req.param("id"));
   const { account_id, accountId, amount, date, description } = await c.req.json();
   const sourceAccountId = Number(account_id || accountId);
   const paymentAmount = Number(amount);
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const debt = (await db.select().from(accounts).where(eq9(accounts.id, debtId)))[0];
+  const debt = (await db.select().from(accounts).where(and7(eq9(accounts.id, debtId), eq9(accounts.userId, user.id))))[0];
   if (!debt || debt.type !== "debt") return c.json({ message: "Debt account not found" }, 404);
-  await db.update(accounts).set({ balance: sql3`${accounts.balance} - ${paymentAmount}`, updatedAt: now }).where(eq9(accounts.id, sourceAccountId));
+  await db.update(accounts).set({ balance: sql3`${accounts.balance} - ${paymentAmount}`, updatedAt: now }).where(and7(eq9(accounts.id, sourceAccountId), eq9(accounts.userId, user.id)));
   const newPaidAmount = (debt.initialBalance || 0) + paymentAmount;
   const isPaidOff = newPaidAmount >= (debt.targetAmount || 0);
-  await db.update(accounts).set({ initialBalance: newPaidAmount, isPaidOff, updatedAt: now }).where(eq9(accounts.id, debtId));
+  await db.update(accounts).set({ initialBalance: newPaidAmount, isPaidOff, updatedAt: now }).where(and7(eq9(accounts.id, debtId), eq9(accounts.userId, user.id)));
   const [tx] = await db.insert(transactions).values({
+    userId: user.id,
     type: "debt_payment",
     accountId: sourceAccountId,
     toAccountId: debtId,
@@ -2130,18 +2201,20 @@ router9.post("/:id/payment", async (c) => {
   return c.json(tx);
 });
 router9.post("/:id/collect", async (c) => {
+  const user = c.get("user");
   const debtId = Number(c.req.param("id"));
   const { account_id, accountId, amount, date, description } = await c.req.json();
   const targetAccountId = Number(account_id || accountId);
   const collectAmount = Number(amount);
   const now = (/* @__PURE__ */ new Date()).toISOString();
-  const debt = (await db.select().from(accounts).where(eq9(accounts.id, debtId)))[0];
+  const debt = (await db.select().from(accounts).where(and7(eq9(accounts.id, debtId), eq9(accounts.userId, user.id))))[0];
   if (!debt || debt.type !== "debt") return c.json({ message: "Debt account not found" }, 404);
-  await db.update(accounts).set({ balance: sql3`${accounts.balance} + ${collectAmount}`, updatedAt: now }).where(eq9(accounts.id, targetAccountId));
+  await db.update(accounts).set({ balance: sql3`${accounts.balance} + ${collectAmount}`, updatedAt: now }).where(and7(eq9(accounts.id, targetAccountId), eq9(accounts.userId, user.id)));
   const newCollectedAmount = (debt.initialBalance || 0) + collectAmount;
   const isPaidOff = newCollectedAmount >= (debt.targetAmount || 0);
-  await db.update(accounts).set({ initialBalance: newCollectedAmount, isPaidOff, updatedAt: now }).where(eq9(accounts.id, debtId));
+  await db.update(accounts).set({ initialBalance: newCollectedAmount, isPaidOff, updatedAt: now }).where(and7(eq9(accounts.id, debtId), eq9(accounts.userId, user.id)));
   const [tx] = await db.insert(transactions).values({
+    userId: user.id,
     type: "debt_collection",
     accountId: debtId,
     toAccountId: targetAccountId,
@@ -2154,8 +2227,10 @@ router9.post("/:id/collect", async (c) => {
   return c.json(tx);
 });
 router9.post("/:id/reopen", async (c) => {
+  const user = c.get("user");
   const debtId = Number(c.req.param("id"));
-  const [reopened] = await db.update(accounts).set({ isPaidOff: false, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq9(accounts.id, debtId)).returning();
+  const [reopened] = await db.update(accounts).set({ isPaidOff: false, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and7(eq9(accounts.id, debtId), eq9(accounts.type, "debt"), eq9(accounts.userId, user.id))).returning();
+  if (!reopened) return c.json({ message: "Debt not found" }, 404);
   return c.json(mapDebt(reopened));
 });
 var debts_default = router9;
@@ -2311,11 +2386,12 @@ var users_default = router11;
 
 // server/routes/recurring.ts
 import { Hono as Hono13 } from "hono";
-import { eq as eq12, desc as desc4 } from "drizzle-orm";
+import { eq as eq12, desc as desc4, and as and8 } from "drizzle-orm";
 var router12 = new Hono13();
 router12.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
 function calculateNextDate(startDate, frequency, interval = 1) {
@@ -2327,6 +2403,7 @@ function calculateNextDate(startDate, frequency, interval = 1) {
   return d.toISOString().split("T")[0];
 }
 router12.get("/", async (c) => {
+  const user = c.get("user");
   const list = await db.select({
     id: recurringTransactions.id,
     type: recurringTransactions.type,
@@ -2342,10 +2419,11 @@ router12.get("/", async (c) => {
     category_id: recurringTransactions.categoryId,
     account: accounts,
     category: categories
-  }).from(recurringTransactions).leftJoin(accounts, eq12(recurringTransactions.accountId, accounts.id)).leftJoin(categories, eq12(recurringTransactions.categoryId, categories.id)).orderBy(desc4(recurringTransactions.id));
+  }).from(recurringTransactions).leftJoin(accounts, eq12(recurringTransactions.accountId, accounts.id)).leftJoin(categories, eq12(recurringTransactions.categoryId, categories.id)).where(eq12(recurringTransactions.userId, user.id)).orderBy(desc4(recurringTransactions.id));
   return c.json({ data: list });
 });
 router12.get("/upcoming", async (c) => {
+  const user = c.get("user");
   const list = await db.select({
     id: recurringTransactions.id,
     type: recurringTransactions.type,
@@ -2355,10 +2433,11 @@ router12.get("/upcoming", async (c) => {
     frequency: recurringTransactions.frequency,
     account: accounts,
     category: categories
-  }).from(recurringTransactions).leftJoin(accounts, eq12(recurringTransactions.accountId, accounts.id)).leftJoin(categories, eq12(recurringTransactions.categoryId, categories.id)).where(eq12(recurringTransactions.isActive, true));
+  }).from(recurringTransactions).leftJoin(accounts, eq12(recurringTransactions.accountId, accounts.id)).leftJoin(categories, eq12(recurringTransactions.categoryId, categories.id)).where(and8(eq12(recurringTransactions.isActive, true), eq12(recurringTransactions.userId, user.id)));
   return c.json({ data: list });
 });
 router12.get("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const list = await db.select({
     id: recurringTransactions.id,
@@ -2375,15 +2454,17 @@ router12.get("/:id", async (c) => {
     category_id: recurringTransactions.categoryId,
     account: accounts,
     category: categories
-  }).from(recurringTransactions).leftJoin(accounts, eq12(recurringTransactions.accountId, accounts.id)).leftJoin(categories, eq12(recurringTransactions.categoryId, categories.id)).where(eq12(recurringTransactions.id, id));
+  }).from(recurringTransactions).leftJoin(accounts, eq12(recurringTransactions.accountId, accounts.id)).leftJoin(categories, eq12(recurringTransactions.categoryId, categories.id)).where(and8(eq12(recurringTransactions.id, id), eq12(recurringTransactions.userId, user.id)));
   if (list.length === 0) return c.json({ message: "Recurring transaction not found" }, 404);
   return c.json(list[0]);
 });
 router12.post("/", async (c) => {
+  const user = c.get("user");
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const startDate = body.start_date || now.split("T")[0];
   const [created] = await db.insert(recurringTransactions).values({
+    userId: user.id,
     type: body.type,
     accountId: Number(body.account_id),
     toAccountId: body.to_account_id ? Number(body.to_account_id) : null,
@@ -2402,6 +2483,7 @@ router12.post("/", async (c) => {
   return c.json(created, 201);
 });
 var handleUpdate8 = async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -2416,34 +2498,37 @@ var handleUpdate8 = async (c) => {
   if (body.frequency !== void 0) updateData.frequency = body.frequency;
   if (body.interval !== void 0) updateData.interval = Number(body.interval);
   if (body.is_active !== void 0) updateData.isActive = Boolean(body.is_active);
-  const [updated] = await db.update(recurringTransactions).set(updateData).where(eq12(recurringTransactions.id, id)).returning();
+  const [updated] = await db.update(recurringTransactions).set(updateData).where(and8(eq12(recurringTransactions.id, id), eq12(recurringTransactions.userId, user.id))).returning();
   if (!updated) return c.json({ message: "Recurring transaction not found" }, 404);
   return c.json(updated);
 };
 router12.put("/:id", handleUpdate8);
 router12.patch("/:id", handleUpdate8);
 router12.post("/:id/skip", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  const item = (await db.select().from(recurringTransactions).where(eq12(recurringTransactions.id, id)))[0];
+  const item = (await db.select().from(recurringTransactions).where(and8(eq12(recurringTransactions.id, id), eq12(recurringTransactions.userId, user.id))))[0];
   if (!item) return c.json({ message: "Recurring transaction not found" }, 404);
   const nextDate = calculateNextDate(item.nextRunDate, item.frequency, item.interval);
-  const [updated] = await db.update(recurringTransactions).set({ nextRunDate: nextDate, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq12(recurringTransactions.id, id)).returning();
+  const [updated] = await db.update(recurringTransactions).set({ nextRunDate: nextDate, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and8(eq12(recurringTransactions.id, id), eq12(recurringTransactions.userId, user.id))).returning();
   return c.json(updated);
 });
 router12.delete("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  await db.delete(recurringTransactions).where(eq12(recurringTransactions.id, id));
+  await db.delete(recurringTransactions).where(and8(eq12(recurringTransactions.id, id), eq12(recurringTransactions.userId, user.id)));
   return c.json({ message: "Recurring transaction deleted" });
 });
 var recurring_default = router12;
 
 // server/routes/automation.ts
 import { Hono as Hono14 } from "hono";
-import { eq as eq13, desc as desc5 } from "drizzle-orm";
+import { eq as eq13, desc as desc5, and as and9 } from "drizzle-orm";
 var router13 = new Hono14();
 router13.use("*", async (c, next) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
+  c.set("user", user);
   await next();
 });
 function formatRule(r) {
@@ -2484,7 +2569,8 @@ function formatRule(r) {
   };
 }
 router13.get("/", async (c) => {
-  const list = await db.select().from(automationRules).orderBy(automationRules.priority);
+  const user = c.get("user");
+  const list = await db.select().from(automationRules).where(eq13(automationRules.userId, user.id)).orderBy(automationRules.priority);
   return c.json({ data: list.map(formatRule) });
 });
 router13.get("/triggers", async (c) => {
@@ -2496,15 +2582,18 @@ router13.get("/triggers", async (c) => {
   });
 });
 router13.get("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  const rule = (await db.select().from(automationRules).where(eq13(automationRules.id, id)))[0];
+  const rule = (await db.select().from(automationRules).where(and9(eq13(automationRules.id, id), eq13(automationRules.userId, user.id))))[0];
   if (!rule) return c.json({ message: "Rule not found" }, 404);
   return c.json(formatRule(rule));
 });
 router13.post("/", async (c) => {
+  const user = c.get("user");
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const [rule] = await db.insert(automationRules).values({
+    userId: user.id,
     name: body.name,
     description: body.description || "",
     triggerType: body.trigger_type || "on_transaction_create",
@@ -2520,6 +2609,7 @@ router13.post("/", async (c) => {
   return c.json(formatRule(rule), 201);
 });
 router13.patch("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
   const body = await c.req.json();
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -2532,22 +2622,24 @@ router13.patch("/:id", async (c) => {
   if (body.actions !== void 0) updateData.actions = JSON.stringify(body.actions);
   if (body.is_active !== void 0) updateData.isActive = Boolean(body.is_active);
   if (body.stop_processing !== void 0) updateData.stopProcessing = Boolean(body.stop_processing);
-  const [updated] = await db.update(automationRules).set(updateData).where(eq13(automationRules.id, id)).returning();
+  const [updated] = await db.update(automationRules).set(updateData).where(and9(eq13(automationRules.id, id), eq13(automationRules.userId, user.id))).returning();
   if (!updated) return c.json({ message: "Rule not found" }, 404);
   return c.json(formatRule(updated));
 });
 router13.post("/:id/toggle", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  const rule = (await db.select().from(automationRules).where(eq13(automationRules.id, id)))[0];
+  const rule = (await db.select().from(automationRules).where(and9(eq13(automationRules.id, id), eq13(automationRules.userId, user.id))))[0];
   if (!rule) return c.json({ message: "Rule not found" }, 404);
-  const [updated] = await db.update(automationRules).set({ isActive: !rule.isActive, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq13(automationRules.id, id)).returning();
+  const [updated] = await db.update(automationRules).set({ isActive: !rule.isActive, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and9(eq13(automationRules.id, id), eq13(automationRules.userId, user.id))).returning();
   return c.json(updated);
 });
 router13.post("/reorder", async (c) => {
+  const user = c.get("user");
   const body = await c.req.json();
   const rules = body.rules || [];
   for (const r of rules) {
-    await db.update(automationRules).set({ priority: Number(r.priority), updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq13(automationRules.id, Number(r.id)));
+    await db.update(automationRules).set({ priority: Number(r.priority), updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(and9(eq13(automationRules.id, Number(r.id)), eq13(automationRules.userId, user.id)));
   }
   return c.json({ success: true });
 });
@@ -2564,8 +2656,9 @@ router13.get("/:id/logs", async (c) => {
   return c.json({ data: logs });
 });
 router13.delete("/:id", async (c) => {
+  const user = c.get("user");
   const id = Number(c.req.param("id"));
-  await db.delete(automationRules).where(eq13(automationRules.id, id));
+  await db.delete(automationRules).where(and9(eq13(automationRules.id, id), eq13(automationRules.userId, user.id)));
   return c.json({ message: "Rule deleted" });
 });
 var automation_default = router13;
@@ -2767,7 +2860,12 @@ app.get("/categories-summary", async (c) => {
 app.get("/transactions-summary", async (c) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ message: "Unauthorized" }, 401);
-  return c.json(await getTransactionSummary());
+  return c.json(await getTransactionSummary(user.id));
+});
+app.get("/accounts-summary", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ message: "Unauthorized" }, 401);
+  return c.json(await getAccountsSummary(user.id));
 });
 app.get("/debts-summary", async (c) => {
   return c.redirect("/api/debts/summary");

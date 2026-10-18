@@ -4,11 +4,12 @@ import { db } from '../db/client'
 import { transactions, accounts, categories, currencies } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
@@ -18,8 +19,10 @@ async function adjustBalance(accountId: number, delta: number) {
         .where(eq(accounts.id, accountId))
 }
 
-async function getTransactionSummary() {
-    const allTx = await db.select().from(transactions)
+async function getTransactionSummary(userId?: number) {
+    const allTx = userId !== undefined
+        ? await db.select().from(transactions).where(eq(transactions.userId, userId))
+        : await db.select().from(transactions)
     const baseCurr = (await db.select().from(currencies).where(eq(currencies.isBase, true)))[0] || { symbol: '€', code: 'EUR', decimals: 2 }
 
     let income = 0
@@ -43,8 +46,9 @@ async function getTransactionSummary() {
 
 // List transactions
 router.get('/', async (c) => {
+    const user = c.get('user')
     const query = c.req.query()
-    const conditions = []
+    const conditions = [eq(transactions.userId, user.id)]
 
     if (query.type) conditions.push(eq(transactions.type, query.type as any))
     if (query.account_id) conditions.push(eq(transactions.accountId, Number(query.account_id)))
@@ -56,7 +60,7 @@ router.get('/', async (c) => {
     const perPage = Math.max(1, Number(query.per_page || 50))
     const offset = (page - 1) * perPage
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+    const whereClause = and(...conditions)
 
     const totalCount = (await db.select({ val: count() }).from(transactions).where(whereClause))[0]?.val || 0
 
@@ -106,7 +110,7 @@ router.get('/', async (c) => {
     }
 
     if (query.with_summary === 'true') {
-        response.summary = await getTransactionSummary()
+        response.summary = await getTransactionSummary(user.id)
     }
 
     return c.json(response)
@@ -114,11 +118,13 @@ router.get('/', async (c) => {
 
 // Summary
 router.get('/summary', async (c) => {
-    return c.json(await getTransactionSummary())
+    const user = c.get('user')
+    return c.json(await getTransactionSummary(user.id))
 })
 
 // Get transaction by ID
 router.get('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const list = await db.select({
         id: transactions.id,
@@ -139,7 +145,7 @@ router.get('/:id', async (c) => {
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))
     .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(eq(transactions.id, id))
+    .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
 
     if (list.length === 0) return c.json({ message: 'Transaction not found' }, 404)
     const tx = list[0]
@@ -155,6 +161,7 @@ router.get('/:id', async (c) => {
 
 // Create transaction
 router.post('/', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const now = new Date().toISOString()
     const amount = Number(body.amount)
@@ -164,6 +171,7 @@ router.post('/', async (c) => {
     const categoryId = body.category_id ? Number(body.category_id) : null
 
     const [tx] = await db.insert(transactions).values({
+        userId: user.id,
         type,
         accountId,
         toAccountId,
@@ -192,12 +200,14 @@ router.post('/', async (c) => {
 
 // Duplicate transaction
 router.post('/:id/duplicate', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const tx = (await db.select().from(transactions).where(eq(transactions.id, id)))[0]
+    const tx = (await db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, user.id))))[0]
     if (!tx) return c.json({ message: 'Transaction not found' }, 404)
 
     const now = new Date().toISOString()
     const [newTx] = await db.insert(transactions).values({
+        userId: user.id,
         type: tx.type,
         accountId: tx.accountId,
         toAccountId: tx.toAccountId,
@@ -225,11 +235,12 @@ router.post('/:id/duplicate', async (c) => {
 
 // Update transaction
 const handleUpdate = async (c: any) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const body = await c.req.json()
     const now = new Date().toISOString()
 
-    const oldTx = (await db.select().from(transactions).where(eq(transactions.id, id)))[0]
+    const oldTx = (await db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, user.id))))[0]
     if (!oldTx) return c.json({ message: 'Transaction not found' }, 404)
 
     // Revert old balances
@@ -257,7 +268,7 @@ const handleUpdate = async (c: any) => {
         description: body.description !== undefined ? body.description : oldTx.description,
         date: body.date !== undefined ? body.date : oldTx.date,
         updatedAt: now,
-    }).where(eq(transactions.id, id)).returning()
+    }).where(and(eq(transactions.id, id), eq(transactions.userId, user.id))).returning()
 
     // Apply new balances
     if (newType === 'income') {
@@ -277,8 +288,9 @@ router.patch('/:id', handleUpdate)
 
 // Delete transaction
 router.delete('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const tx = (await db.select().from(transactions).where(eq(transactions.id, id)))[0]
+    const tx = (await db.select().from(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, user.id))))[0]
     if (!tx) return c.json({ message: 'Transaction not found' }, 404)
 
     // Revert balance changes
@@ -291,7 +303,7 @@ router.delete('/:id', async (c) => {
         await adjustBalance(tx.toAccountId, -(tx.toAmount || tx.amount))
     }
 
-    await db.delete(transactions).where(eq(transactions.id, id))
+    await db.delete(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
     return c.json({ message: 'Transaction deleted' })
 })
 

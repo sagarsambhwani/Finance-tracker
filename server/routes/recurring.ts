@@ -1,14 +1,15 @@
 import { Hono } from 'hono'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, and } from 'drizzle-orm'
 import { db } from '../db/client'
 import { recurringTransactions, accounts, categories } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
@@ -23,6 +24,7 @@ function calculateNextDate(startDate: string, frequency: string, interval = 1): 
 
 // List recurring transactions
 router.get('/', async (c) => {
+    const user = c.get('user')
     const list = await db.select({
         id: recurringTransactions.id,
         type: recurringTransactions.type,
@@ -42,6 +44,7 @@ router.get('/', async (c) => {
     .from(recurringTransactions)
     .leftJoin(accounts, eq(recurringTransactions.accountId, accounts.id))
     .leftJoin(categories, eq(recurringTransactions.categoryId, categories.id))
+    .where(eq(recurringTransactions.userId, user.id))
     .orderBy(desc(recurringTransactions.id))
 
     return c.json({ data: list })
@@ -49,6 +52,7 @@ router.get('/', async (c) => {
 
 // Upcoming projections for next 30 days
 router.get('/upcoming', async (c) => {
+    const user = c.get('user')
     const list = await db.select({
         id: recurringTransactions.id,
         type: recurringTransactions.type,
@@ -62,13 +66,14 @@ router.get('/upcoming', async (c) => {
     .from(recurringTransactions)
     .leftJoin(accounts, eq(recurringTransactions.accountId, accounts.id))
     .leftJoin(categories, eq(recurringTransactions.categoryId, categories.id))
-    .where(eq(recurringTransactions.isActive, true))
+    .where(and(eq(recurringTransactions.isActive, true), eq(recurringTransactions.userId, user.id)))
 
     return c.json({ data: list })
 })
 
 // Get recurring by ID
 router.get('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const list = await db.select({
         id: recurringTransactions.id,
@@ -89,7 +94,7 @@ router.get('/:id', async (c) => {
     .from(recurringTransactions)
     .leftJoin(accounts, eq(recurringTransactions.accountId, accounts.id))
     .leftJoin(categories, eq(recurringTransactions.categoryId, categories.id))
-    .where(eq(recurringTransactions.id, id))
+    .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, user.id)))
 
     if (list.length === 0) return c.json({ message: 'Recurring transaction not found' }, 404)
     return c.json(list[0])
@@ -97,11 +102,13 @@ router.get('/:id', async (c) => {
 
 // Create recurring transaction
 router.post('/', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const now = new Date().toISOString()
     const startDate = body.start_date || now.split('T')[0]
 
     const [created] = await db.insert(recurringTransactions).values({
+        userId: user.id,
         type: body.type,
         accountId: Number(body.account_id),
         toAccountId: body.to_account_id ? Number(body.to_account_id) : null,
@@ -123,6 +130,7 @@ router.post('/', async (c) => {
 
 // Update recurring transaction (PUT and PATCH)
 const handleUpdate = async (c: any) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const body = await c.req.json()
     const now = new Date().toISOString()
@@ -139,7 +147,7 @@ const handleUpdate = async (c: any) => {
     if (body.interval !== undefined) updateData.interval = Number(body.interval)
     if (body.is_active !== undefined) updateData.isActive = Boolean(body.is_active)
 
-    const [updated] = await db.update(recurringTransactions).set(updateData).where(eq(recurringTransactions.id, id)).returning()
+    const [updated] = await db.update(recurringTransactions).set(updateData).where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, user.id))).returning()
     if (!updated) return c.json({ message: 'Recurring transaction not found' }, 404)
 
     return c.json(updated)
@@ -150,14 +158,15 @@ router.patch('/:id', handleUpdate)
 
 // Skip next occurrence
 router.post('/:id/skip', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const item = (await db.select().from(recurringTransactions).where(eq(recurringTransactions.id, id)))[0]
+    const item = (await db.select().from(recurringTransactions).where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, user.id))))[0]
     if (!item) return c.json({ message: 'Recurring transaction not found' }, 404)
 
     const nextDate = calculateNextDate(item.nextRunDate, item.frequency, item.interval)
     const [updated] = await db.update(recurringTransactions)
         .set({ nextRunDate: nextDate, updatedAt: new Date().toISOString() })
-        .where(eq(recurringTransactions.id, id))
+        .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, user.id)))
         .returning()
 
     return c.json(updated)
@@ -165,9 +174,9 @@ router.post('/:id/skip', async (c) => {
 
 // Delete
 router.delete('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    await db.delete(recurringTransactions).where(eq(recurringTransactions.id, id))
+    await db.delete(recurringTransactions).where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, user.id)))
     return c.json({ message: 'Recurring transaction deleted' })
 })
-
 export default router

@@ -1,19 +1,21 @@
 import { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { db } from '../db/client'
 import { budgets, categories, currencies, transactions } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
 // List budgets
 router.get('/', async (c) => {
+    const user = c.get('user')
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
@@ -30,8 +32,9 @@ router.get('/', async (c) => {
     .from(budgets)
     .leftJoin(categories, eq(budgets.categoryId, categories.id))
     .leftJoin(currencies, eq(budgets.currencyId, currencies.id))
+    .where(eq(budgets.userId, user.id))
 
-    const allExpenses = await db.select().from(transactions).where(eq(transactions.type, 'expense'))
+    const allExpenses = await db.select().from(transactions).where(and(eq(transactions.type, 'expense'), eq(transactions.userId, user.id)))
 
     const mapped = list.map(b => {
         const amt = Number(b.amount)
@@ -79,6 +82,7 @@ router.get('/', async (c) => {
 
 // Get budget by ID
 router.get('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const list = await db.select({
         id: budgets.id,
@@ -92,7 +96,7 @@ router.get('/:id', async (c) => {
     .from(budgets)
     .leftJoin(categories, eq(budgets.categoryId, categories.id))
     .leftJoin(currencies, eq(budgets.currencyId, currencies.id))
-    .where(eq(budgets.id, id))
+    .where(and(eq(budgets.id, id), eq(budgets.userId, user.id)))
 
     if (list.length === 0) return c.json({ message: 'Budget not found' }, 404)
     const b = list[0]
@@ -116,11 +120,14 @@ router.get('/:id', async (c) => {
 
 // Create budget
 router.post('/', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const now = new Date().toISOString()
 
     const [budget] = await db.insert(budgets).values({
+        userId: user.id,
         categoryId: Number(body.category_id),
+        currencyId: body.currency_id ? Number(body.currency_id) : undefined,
         amount: Number(body.amount),
         period: body.period || 'monthly',
         createdAt: now,
@@ -132,6 +139,7 @@ router.post('/', async (c) => {
 
 // Update budget (PUT and PATCH)
 const handleUpdate = async (c: any) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const body = await c.req.json()
     const now = new Date().toISOString()
@@ -141,7 +149,7 @@ const handleUpdate = async (c: any) => {
         amount: body.amount !== undefined ? Number(body.amount) : undefined,
         period: body.period,
         updatedAt: now,
-    }).where(eq(budgets.id, id)).returning()
+    }).where(and(eq(budgets.id, id), eq(budgets.userId, user.id))).returning()
 
     if (!updated) return c.json({ message: 'Budget not found' }, 404)
     return c.json(updated)
@@ -152,8 +160,9 @@ router.patch('/:id', handleUpdate)
 
 // Delete budget
 router.delete('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    await db.delete(budgets).where(eq(budgets.id, id))
+    await db.delete(budgets).where(and(eq(budgets.id, id), eq(budgets.userId, user.id)))
     return c.json({ message: 'Budget deleted' })
 })
 

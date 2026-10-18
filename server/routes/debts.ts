@@ -4,16 +4,21 @@ import { db } from '../db/client'
 import { accounts, transactions, currencies } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
-async function getDebtsSummary() {
-    const debts = await db.select().from(accounts).where(and(eq(accounts.type, 'debt'), eq(accounts.isPaidOff, false)))
+async function getDebtsSummary(userId?: number) {
+    const conditions = [eq(accounts.type, 'debt'), eq(accounts.isPaidOff, false)]
+    if (userId !== undefined) {
+        conditions.push(eq(accounts.userId, userId))
+    }
+    const debts = await db.select().from(accounts).where(and(...conditions))
     const baseCurr = (await db.select().from(currencies).where(eq(currencies.isBase, true)))[0] || { symbol: '€', decimals: 2 }
 
     let totalIOwe = 0
@@ -74,10 +79,11 @@ function mapDebt(d: any) {
 
 // List debts
 router.get('/', async (c) => {
+    const user = c.get('user')
     const includeCompleted = c.req.query('include_completed') === 'true'
     const withSummary = c.req.query('with_summary') === 'true'
 
-    const conditions = [eq(accounts.type, 'debt')]
+    const conditions = [eq(accounts.type, 'debt'), eq(accounts.userId, user.id)]
     if (!includeCompleted) {
         conditions.push(eq(accounts.isPaidOff, false))
     }
@@ -106,7 +112,7 @@ router.get('/', async (c) => {
 
     const response: any = { data: mapped }
     if (withSummary) {
-        response.summary = await getDebtsSummary()
+        response.summary = await getDebtsSummary(user.id)
     }
 
     return c.json(response)
@@ -114,11 +120,13 @@ router.get('/', async (c) => {
 
 // Summary
 router.get('/summary', async (c) => {
-    return c.json(await getDebtsSummary())
+    const user = c.get('user')
+    return c.json(await getDebtsSummary(user.id))
 })
 
 // Get debt by ID
 router.get('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const list = await db.select({
         id: accounts.id,
@@ -138,7 +146,7 @@ router.get('/:id', async (c) => {
     })
     .from(accounts)
     .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-    .where(and(eq(accounts.id, id), eq(accounts.type, 'debt')))
+    .where(and(eq(accounts.id, id), eq(accounts.type, 'debt'), eq(accounts.userId, user.id)))
 
     if (list.length === 0) return c.json({ message: 'Debt not found' }, 404)
     return c.json(mapDebt(list[0]))
@@ -146,10 +154,12 @@ router.get('/:id', async (c) => {
 
 // Create a debt
 router.post('/', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const now = new Date().toISOString()
 
     const [newDebt] = await db.insert(accounts).values({
+        userId: user.id,
         name: body.name,
         type: 'debt',
         debtType: body.debt_type || body.debtType,
@@ -170,6 +180,7 @@ router.post('/', async (c) => {
 
 // Update debt
 router.patch('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const body = await c.req.json()
     const now = new Date().toISOString()
@@ -190,7 +201,7 @@ router.patch('/:id', async (c) => {
         updateData.currencyId = Number(body.currency_id ?? body.currencyId)
     }
 
-    const [updated] = await db.update(accounts).set(updateData).where(and(eq(accounts.id, id), eq(accounts.type, 'debt'))).returning()
+    const [updated] = await db.update(accounts).set(updateData).where(and(eq(accounts.id, id), eq(accounts.type, 'debt'), eq(accounts.userId, user.id))).returning()
     if (!updated) return c.json({ message: 'Debt not found' }, 404)
 
     return c.json(mapDebt(updated))
@@ -198,34 +209,37 @@ router.patch('/:id', async (c) => {
 
 // Delete debt
 router.delete('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    await db.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.type, 'debt')))
+    await db.delete(accounts).where(and(eq(accounts.id, id), eq(accounts.type, 'debt'), eq(accounts.userId, user.id)))
     return c.json({ message: 'Debt deleted' })
 })
 
 // Make a payment on a debt
 router.post('/:id/payment', async (c) => {
+    const user = c.get('user')
     const debtId = Number(c.req.param('id'))
     const { account_id, accountId, amount, date, description } = await c.req.json()
     const sourceAccountId = Number(account_id || accountId)
     const paymentAmount = Number(amount)
     const now = new Date().toISOString()
 
-    const debt = (await db.select().from(accounts).where(eq(accounts.id, debtId)))[0]
+    const debt = (await db.select().from(accounts).where(and(eq(accounts.id, debtId), eq(accounts.userId, user.id))))[0]
     if (!debt || debt.type !== 'debt') return c.json({ message: 'Debt account not found' }, 404)
 
     await db.update(accounts)
         .set({ balance: sql`${accounts.balance} - ${paymentAmount}`, updatedAt: now })
-        .where(eq(accounts.id, sourceAccountId))
+        .where(and(eq(accounts.id, sourceAccountId), eq(accounts.userId, user.id)))
 
     const newPaidAmount = (debt.initialBalance || 0) + paymentAmount
     const isPaidOff = newPaidAmount >= (debt.targetAmount || 0)
 
     await db.update(accounts)
         .set({ initialBalance: newPaidAmount, isPaidOff, updatedAt: now })
-        .where(eq(accounts.id, debtId))
+        .where(and(eq(accounts.id, debtId), eq(accounts.userId, user.id)))
 
     const [tx] = await db.insert(transactions).values({
+        userId: user.id,
         type: 'debt_payment',
         accountId: sourceAccountId,
         toAccountId: debtId,
@@ -241,27 +255,29 @@ router.post('/:id/payment', async (c) => {
 
 // Collect money received on a debt
 router.post('/:id/collect', async (c) => {
+    const user = c.get('user')
     const debtId = Number(c.req.param('id'))
     const { account_id, accountId, amount, date, description } = await c.req.json()
     const targetAccountId = Number(account_id || accountId)
     const collectAmount = Number(amount)
     const now = new Date().toISOString()
 
-    const debt = (await db.select().from(accounts).where(eq(accounts.id, debtId)))[0]
+    const debt = (await db.select().from(accounts).where(and(eq(accounts.id, debtId), eq(accounts.userId, user.id))))[0]
     if (!debt || debt.type !== 'debt') return c.json({ message: 'Debt account not found' }, 404)
 
     await db.update(accounts)
         .set({ balance: sql`${accounts.balance} + ${collectAmount}`, updatedAt: now })
-        .where(eq(accounts.id, targetAccountId))
+        .where(and(eq(accounts.id, targetAccountId), eq(accounts.userId, user.id)))
 
     const newCollectedAmount = (debt.initialBalance || 0) + collectAmount
     const isPaidOff = newCollectedAmount >= (debt.targetAmount || 0)
 
     await db.update(accounts)
         .set({ initialBalance: newCollectedAmount, isPaidOff, updatedAt: now })
-        .where(eq(accounts.id, debtId))
+        .where(and(eq(accounts.id, debtId), eq(accounts.userId, user.id)))
 
     const [tx] = await db.insert(transactions).values({
+        userId: user.id,
         type: 'debt_collection',
         accountId: debtId,
         toAccountId: targetAccountId,
@@ -277,13 +293,16 @@ router.post('/:id/collect', async (c) => {
 
 // Reopen a completed debt
 router.post('/:id/reopen', async (c) => {
+    const user = c.get('user')
     const debtId = Number(c.req.param('id'))
     const [reopened] = await db.update(accounts)
         .set({ isPaidOff: false, updatedAt: new Date().toISOString() })
-        .where(eq(accounts.id, debtId))
+        .where(and(eq(accounts.id, debtId), eq(accounts.type, 'debt'), eq(accounts.userId, user.id)))
         .returning()
 
+    if (!reopened) return c.json({ message: 'Debt not found' }, 404)
     return c.json(mapDebt(reopened))
 })
 
 export default router
+export { getDebtsSummary }

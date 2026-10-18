@@ -1,14 +1,15 @@
 import { Hono } from 'hono'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, and } from 'drizzle-orm'
 import { db } from '../db/client'
 import { automationRules, automationRuleLogs } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
@@ -58,7 +59,8 @@ function formatRule(r: any) {
 
 // List automation rules
 router.get('/', async (c) => {
-    const list = await db.select().from(automationRules).orderBy(automationRules.priority)
+    const user = c.get('user')
+    const list = await db.select().from(automationRules).where(eq(automationRules.userId, user.id)).orderBy(automationRules.priority)
     return c.json({ data: list.map(formatRule) })
 })
 
@@ -74,18 +76,21 @@ router.get('/triggers', async (c) => {
 
 // Get rule by ID
 router.get('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const rule = (await db.select().from(automationRules).where(eq(automationRules.id, id)))[0]
+    const rule = (await db.select().from(automationRules).where(and(eq(automationRules.id, id), eq(automationRules.userId, user.id))))[0]
     if (!rule) return c.json({ message: 'Rule not found' }, 404)
     return c.json(formatRule(rule))
 })
 
 // Create rule
 router.post('/', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const now = new Date().toISOString()
 
     const [rule] = await db.insert(automationRules).values({
+        userId: user.id,
         name: body.name,
         description: body.description || '',
         triggerType: body.trigger_type || 'on_transaction_create',
@@ -104,6 +109,7 @@ router.post('/', async (c) => {
 
 // Update rule
 router.patch('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const body = await c.req.json()
     const now = new Date().toISOString()
@@ -118,7 +124,7 @@ router.patch('/:id', async (c) => {
     if (body.is_active !== undefined) updateData.isActive = Boolean(body.is_active)
     if (body.stop_processing !== undefined) updateData.stopProcessing = Boolean(body.stop_processing)
 
-    const [updated] = await db.update(automationRules).set(updateData).where(eq(automationRules.id, id)).returning()
+    const [updated] = await db.update(automationRules).set(updateData).where(and(eq(automationRules.id, id), eq(automationRules.userId, user.id))).returning()
     if (!updated) return c.json({ message: 'Rule not found' }, 404)
 
     return c.json(formatRule(updated))
@@ -126,13 +132,14 @@ router.patch('/:id', async (c) => {
 
 // Toggle rule active status
 router.post('/:id/toggle', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const rule = (await db.select().from(automationRules).where(eq(automationRules.id, id)))[0]
+    const rule = (await db.select().from(automationRules).where(and(eq(automationRules.id, id), eq(automationRules.userId, user.id))))[0]
     if (!rule) return c.json({ message: 'Rule not found' }, 404)
 
     const [updated] = await db.update(automationRules)
         .set({ isActive: !rule.isActive, updatedAt: new Date().toISOString() })
-        .where(eq(automationRules.id, id))
+        .where(and(eq(automationRules.id, id), eq(automationRules.userId, user.id)))
         .returning()
 
     return c.json(updated)
@@ -140,12 +147,13 @@ router.post('/:id/toggle', async (c) => {
 
 // Reorder rules
 router.post('/reorder', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const rules = body.rules || []
     for (const r of rules) {
         await db.update(automationRules)
             .set({ priority: Number(r.priority), updatedAt: new Date().toISOString() })
-            .where(eq(automationRules.id, Number(r.id)))
+            .where(and(eq(automationRules.id, Number(r.id)), eq(automationRules.userId, user.id)))
     }
     return c.json({ success: true })
 })
@@ -173,8 +181,9 @@ router.get('/:id/logs', async (c) => {
 
 // Delete rule
 router.delete('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    await db.delete(automationRules).where(eq(automationRules.id, id))
+    await db.delete(automationRules).where(and(eq(automationRules.id, id), eq(automationRules.userId, user.id)))
     return c.json({ message: 'Rule deleted' })
 })
 

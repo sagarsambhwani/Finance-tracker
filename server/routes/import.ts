@@ -1,16 +1,17 @@
 import { Hono } from 'hono'
 import crypto from 'crypto'
 import pdfParse from 'pdf-parse'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { db } from '../db/client'
 import { transactions, accounts } from '../db/schema'
 import { getAuthUser } from './auth'
 
-const router = new Hono()
+const router = new Hono<{ Variables: { user: any } }>()
 
 router.use('*', async (c, next) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    c.set('user', user)
     await next()
 })
 
@@ -156,6 +157,7 @@ router.post('/parse', async (c) => {
 
 // Execute Import (Saves rows to database and prevents duplicates)
 router.post('/execute', async (c) => {
+    const user = c.get('user')
     const { account_id, rows } = await c.req.json()
     const accountId = Number(account_id)
     if (!accountId || !Array.isArray(rows)) {
@@ -168,8 +170,8 @@ router.post('/execute', async (c) => {
     let netBalanceChange = 0
 
     for (const row of rows) {
-        // Check for duplicate via dedupHash
-        const existing = await db.select().from(transactions).where(eq(transactions.dedupHash, row.hash)).limit(1)
+        // Check for duplicate via dedupHash for this user
+        const existing = await db.select().from(transactions).where(and(eq(transactions.dedupHash, row.hash), eq(transactions.userId, user.id))).limit(1)
         if (existing.length > 0) {
             skippedDuplicates++
             continue
@@ -179,6 +181,7 @@ router.post('/execute', async (c) => {
         const absAmount = Math.abs(row.amount)
 
         await db.insert(transactions).values({
+            userId: user.id,
             type,
             accountId,
             amount: absAmount,
@@ -194,11 +197,11 @@ router.post('/execute', async (c) => {
     }
 
     // Update account balance
-    const account = (await db.select().from(accounts).where(eq(accounts.id, accountId)))[0]
+    const account = (await db.select().from(accounts).where(and(eq(accounts.id, accountId), eq(accounts.userId, user.id))))[0]
     if (account) {
         await db.update(accounts)
             .set({ balance: account.balance + netBalanceChange, updatedAt: now })
-            .where(eq(accounts.id, accountId))
+            .where(and(eq(accounts.id, accountId), eq(accounts.userId, user.id)))
     }
 
     return c.json({

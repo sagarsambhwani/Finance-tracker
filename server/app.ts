@@ -68,7 +68,12 @@ app.get('/categories-summary', async (c) => {
 app.get('/transactions-summary', async (c) => {
     const user = await getAuthUser(c)
     if (!user) return c.json({ message: 'Unauthorized' }, 401)
-    return c.json(await getTransactionSummary())
+    return c.json(await getTransactionSummary(user.id))
+})
+app.get('/accounts-summary', async (c) => {
+    const user = await getAuthUser(c)
+    if (!user) return c.json({ message: 'Unauthorized' }, 401)
+    return c.json(await getAccountsSummary(user.id))
 })
 app.get('/debts-summary', async (c) => {
     return c.redirect('/api/debts/summary')
