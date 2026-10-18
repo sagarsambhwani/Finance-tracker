@@ -102,6 +102,7 @@ export const accounts = sqliteTable('accounts', {
 // ==========================================
 export const categories = sqliteTable('categories', {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     type: text('type', { enum: ['income', 'expense'] }).notNull(),
     icon: text('icon'),
@@ -109,7 +110,9 @@ export const categories = sqliteTable('categories', {
     parentId: integer('parent_id'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
-})
+}, (table) => [
+    index('categories_user_id_idx').on(table.userId),
+])
 
 export const tags = sqliteTable('tags', {
     id: integer('id').primaryKey({ autoIncrement: true }),

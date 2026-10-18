@@ -15,11 +15,12 @@ router.use('*', async (c, next) => {
 
 // List categories
 router.get('/', async (c) => {
+    const user = c.get('user')
     const type = c.req.query('type')
-    const conditions = []
+    const conditions = [eq(categories.userId, user.id)]
     if (type) conditions.push(eq(categories.type, type as any))
 
-    const list = await db.select().from(categories).where(conditions.length > 0 ? and(...conditions) : undefined)
+    const list = await db.select().from(categories).where(and(...conditions))
     return c.json({ data: list })
 })
 
@@ -29,7 +30,7 @@ router.get('/summary', async (c) => {
     const type = c.req.query('type') || 'expense'
     const baseCurr = (await db.select().from(currencies).where(eq(currencies.isBase, true)))[0] || { symbol: '€' }
 
-    const cats = await db.select().from(categories).where(eq(categories.type, type as any))
+    const cats = await db.select().from(categories).where(and(eq(categories.type, type as any), eq(categories.userId, user.id)))
     const txs = await db.select().from(transactions).where(and(eq(transactions.type, type as any), eq(transactions.userId, user.id)))
 
     const totalsByCat = new Map<number, number>()
@@ -61,7 +62,7 @@ router.get('/summary', async (c) => {
 router.get('/:id/statistics', async (c) => {
     const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const cat = (await db.select().from(categories).where(eq(categories.id, id)))[0]
+    const cat = (await db.select().from(categories).where(and(eq(categories.id, id), eq(categories.userId, user.id))))[0]
     if (!cat) return c.json({ message: 'Category not found' }, 404)
 
     const catTx = await db.select().from(transactions).where(and(eq(transactions.categoryId, id), eq(transactions.userId, user.id)))
@@ -78,18 +79,21 @@ router.get('/:id/statistics', async (c) => {
 
 // Get category by ID
 router.get('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    const category = (await db.select().from(categories).where(eq(categories.id, id)))[0]
+    const category = (await db.select().from(categories).where(and(eq(categories.id, id), eq(categories.userId, user.id))))[0]
     if (!category) return c.json({ message: 'Category not found' }, 404)
     return c.json(category)
 })
 
 // Create category
 router.post('/', async (c) => {
+    const user = c.get('user')
     const body = await c.req.json()
     const now = new Date().toISOString()
 
     const [category] = await db.insert(categories).values({
+        userId: user.id,
         name: body.name,
         type: body.type || 'expense',
         icon: body.icon || 'tag',
@@ -104,6 +108,7 @@ router.post('/', async (c) => {
 
 // Update category (PUT and PATCH)
 const handleUpdate = async (c: any) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
     const body = await c.req.json()
     const now = new Date().toISOString()
@@ -115,7 +120,7 @@ const handleUpdate = async (c: any) => {
     if (body.color !== undefined) updateData.color = body.color
     if (body.parent_id !== undefined) updateData.parentId = body.parent_id ? Number(body.parent_id) : null
 
-    const [updated] = await db.update(categories).set(updateData).where(eq(categories.id, id)).returning()
+    const [updated] = await db.update(categories).set(updateData).where(and(eq(categories.id, id), eq(categories.userId, user.id))).returning()
     if (!updated) return c.json({ message: 'Category not found' }, 404)
 
     return c.json(updated)
@@ -126,8 +131,9 @@ router.patch('/:id', handleUpdate)
 
 // Delete category
 router.delete('/:id', async (c) => {
+    const user = c.get('user')
     const id = Number(c.req.param('id'))
-    await db.delete(categories).where(eq(categories.id, id))
+    await db.delete(categories).where(and(eq(categories.id, id), eq(categories.userId, user.id)))
     return c.json({ message: 'Category deleted' })
 })
 

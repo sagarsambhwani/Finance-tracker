@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import { db } from '../db/client'
+import { db, seedUserCategories } from '../db/client'
 import { users } from '../db/schema'
 import { getAuthUser } from './auth'
 
@@ -80,6 +80,8 @@ router.post('/', requireAdmin, async (c) => {
         createdAt: now,
         updatedAt: now,
     }).returning()
+
+    await seedUserCategories(newUser.id)
 
     return c.json({
         id: newUser.id,

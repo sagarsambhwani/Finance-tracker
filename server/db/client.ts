@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { createClient } from '@libsql/client/web'
 import { drizzle } from 'drizzle-orm/libsql'
+import { eq } from 'drizzle-orm'
 import * as schema from './schema'
 
 export const url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || ''
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     icon TEXT,
@@ -278,19 +280,31 @@ export async function seedDefaultData() {
 
         const existingCategories = await db.select().from(schema.categories).limit(1)
         if (existingCategories.length === 0) {
-            await db.insert(schema.categories).values([
-                { name: 'Salary', type: 'income', icon: 'wallet', color: '#10b981', createdAt: now, updatedAt: now },
-                { name: 'Freelance', type: 'income', icon: 'briefcase', color: '#06b6d4', createdAt: now, updatedAt: now },
-                { name: 'Food & Dining', type: 'expense', icon: 'utensils', color: '#f59e0b', createdAt: now, updatedAt: now },
-                { name: 'Groceries', type: 'expense', icon: 'shopping-cart', color: '#84cc16', createdAt: now, updatedAt: now },
-                { name: 'Housing & Rent', type: 'expense', icon: 'home', color: '#6366f1', createdAt: now, updatedAt: now },
-                { name: 'Utilities', type: 'expense', icon: 'zap', color: '#ec4899', createdAt: now, updatedAt: now },
-                { name: 'Transportation', type: 'expense', icon: 'car', color: '#3b82f6', createdAt: now, updatedAt: now },
-                { name: 'Entertainment', type: 'expense', icon: 'film', color: '#8b5cf6', createdAt: now, updatedAt: now },
-                { name: 'Health & Medical', type: 'expense', icon: 'heart', color: '#ef4444', createdAt: now, updatedAt: now },
-            ]).onConflictDoNothing()
+            await seedUserCategories(1)
         }
     } catch (e) {
         console.warn('Seeding check note:', e)
+    }
+}
+
+export async function seedUserCategories(userId: number) {
+    try {
+        const existing = await db.select().from(schema.categories).where(eq(schema.categories.userId, userId)).limit(1)
+        if (existing.length > 0) return
+
+        const now = new Date().toISOString()
+        await db.insert(schema.categories).values([
+            { userId, name: 'Salary', type: 'income', icon: 'wallet', color: '#10b981', createdAt: now, updatedAt: now },
+            { userId, name: 'Freelance', type: 'income', icon: 'briefcase', color: '#06b6d4', createdAt: now, updatedAt: now },
+            { userId, name: 'Food & Dining', type: 'expense', icon: 'utensils', color: '#f59e0b', createdAt: now, updatedAt: now },
+            { userId, name: 'Groceries', type: 'expense', icon: 'shopping-cart', color: '#84cc16', createdAt: now, updatedAt: now },
+            { userId, name: 'Housing & Rent', type: 'expense', icon: 'home', color: '#6366f1', createdAt: now, updatedAt: now },
+            { userId, name: 'Utilities', type: 'expense', icon: 'zap', color: '#ec4899', createdAt: now, updatedAt: now },
+            { userId, name: 'Transportation', type: 'expense', icon: 'car', color: '#3b82f6', createdAt: now, updatedAt: now },
+            { userId, name: 'Entertainment', type: 'expense', icon: 'film', color: '#8b5cf6', createdAt: now, updatedAt: now },
+            { userId, name: 'Health & Medical', type: 'expense', icon: 'heart', color: '#ef4444', createdAt: now, updatedAt: now },
+        ])
+    } catch (e) {
+        console.warn('Error seeding user categories:', e)
     }
 }

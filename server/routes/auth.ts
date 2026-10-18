@@ -3,7 +3,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
-import { db } from '../db/client'
+import { db, seedUserCategories } from '../db/client'
 import { users, authSessions } from '../db/schema'
 
 const auth = new Hono()
@@ -56,6 +56,8 @@ auth.post('/register', async (c) => {
         createdAt: now,
         updatedAt: now,
     }).returning()
+
+    await seedUserCategories(newUser.id)
 
     // Issue session
     const token = crypto.randomBytes(32).toString('hex')
